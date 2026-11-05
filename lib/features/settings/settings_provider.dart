@@ -66,14 +66,14 @@ class SettingsState {
 
   SettingsState({
     this.isInitialized = false,
-    this.filters = const {},
+    this.filters = const {MediaFilter.video},
     this.autoplay = true,
     this.isListView = false,
-    this.mediaCacheSizeMB = 500,
+    this.mediaCacheSizeMB = 250,
     this.syncInterval = 15,
     this.syncBatchSize = 10,
-    this.loadBatchSize = 20,
-    this.timelineBatchSize = 20,
+    this.loadBatchSize = 12,
+    this.timelineBatchSize = 16,
     this.cooldownDuration = 15,
     this.pruneThreshold = 50000,
     this.avoidWatchedContent = true,
@@ -207,26 +207,17 @@ class SettingsNotifier extends Notifier<SettingsState> {
 
   Future<void> _init() async {
     _prefs = await SharedPreferences.getInstance();
-    final filterStrings = _prefs.getStringList('filters') ?? [];
-
-    final filters = filterStrings
-        .map((s) {
-          try {
-            return MediaFilter.values.firstWhere((f) => f.name == s);
-          } catch (_) {
-            return null;
-          }
-        })
-        .whereType<MediaFilter>()
-        .toSet();
+    // Video-only mode is enforced for new and upgraded installations.
+    const filters = {MediaFilter.video};
+    await _prefs.setStringList('filters', const ['video']);
 
     final isListView = _prefs.getBool('isListView') ?? false;
-    final mediaCacheSizeMB = _prefs.getInt('mediaCacheSizeMB') ?? 500;
+    final mediaCacheSizeMB = _prefs.getInt('mediaCacheSizeMB') ?? 250;
 
     final syncInterval = _prefs.getInt('syncInterval') ?? 15;
     final syncBatchSize = _prefs.getInt('syncBatchSize') ?? 10;
-    final loadBatchSize = _prefs.getInt('loadBatchSize') ?? 20;
-    final timelineBatchSize = _prefs.getInt('timelineBatchSize') ?? 20;
+    final loadBatchSize = _prefs.getInt('loadBatchSize') ?? 12;
+    final timelineBatchSize = _prefs.getInt('timelineBatchSize') ?? 16;
     final cooldownDuration = _prefs.getInt('cooldownDuration') ?? 15;
     final pruneThreshold = _prefs.getInt('pruneThreshold') ?? 50000;
 
@@ -488,14 +479,8 @@ class SettingsNotifier extends Notifier<SettingsState> {
   }
 
   void toggleFilter(MediaFilter filter) {
-    final nextFilters = Set<MediaFilter>.from(state.filters);
-    if (nextFilters.contains(filter)) {
-      nextFilters.remove(filter);
-    } else {
-      nextFilters.add(filter);
-    }
-    state = state.copyWith(filters: nextFilters);
-    _prefs.setStringList('filters', nextFilters.map((f) => f.name).toList());
+    // Images and text are intentionally unavailable in this fork.
+    _prefs.setStringList('filters', const ['video']);
   }
 
   void toggleAutoplay(bool value) {

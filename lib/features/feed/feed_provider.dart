@@ -18,11 +18,13 @@ class FeedState {
   final bool isRefreshing;
 
   FeedState({
-    required this.tweets,
+    required List<Tweet> tweets,
     this.cursorBottom,
     this.isLoadingMore = false,
     this.isRefreshing = false,
-  });
+  }) : tweets = List<Tweet>.unmodifiable(
+          tweets.where((tweet) => tweet.isVideo && tweet.mediaUrls.isNotEmpty),
+        );
 
   FeedState copyWith({
     List<Tweet>? tweets,
@@ -127,15 +129,17 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
         avoidWatchedContent: settings.avoidWatchedContent,
         filters: settings.filters,
       );
-      final localTagged =
-          localPool.map((t) => t.copyWith(source: 'Cache')).toList();
+      final localTagged = localPool
+          .where((t) => t.isVideo && t.mediaUrls.isNotEmpty)
+          .map((t) => t.copyWith(source: 'Cache'))
+          .toList();
       AppLogger.log(
           'XFLOW: Cold start: Retrieved ${localPool.length} local candidates');
 
       // EARLY MEDIA WARMUP
       if (localTagged.isNotEmpty) {
         final pool = ref.read(playerPoolProvider.notifier);
-        for (int i = 0; i < localTagged.length && i < 3; i++) {
+        for (int i = 0; i < localTagged.length && i < 2; i++) {
           final tweet = localTagged[i];
           if (tweet.isVideo && tweet.mediaUrls.isNotEmpty) {
             pool.warmup(tweet.id, tweet.mediaUrls.first);
@@ -208,8 +212,10 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
       }
 
       final freshPool = freshResponse.tweets;
-      final freshTagged =
-          freshPool.map((t) => t.copyWith(source: 'API')).toList();
+      final freshTagged = freshPool
+          .where((t) => t.isVideo && t.mediaUrls.isNotEmpty)
+          .map((t) => t.copyWith(source: 'API'))
+          .toList();
 
       debugPrint(
           'XFLOW: Background refresh returned ${freshPool.length} fresh tweets');
@@ -224,8 +230,10 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
         avoidWatchedContent: settings.avoidWatchedContent,
         filters: settings.filters,
       );
-      final localTagged =
-          localPool.map((t) => t.copyWith(source: 'Cache')).toList();
+      final localTagged = localPool
+          .where((t) => t.isVideo && t.mediaUrls.isNotEmpty)
+          .map((t) => t.copyWith(source: 'Cache'))
+          .toList();
 
       final currentAsync = ref.read(feedNotifierProvider);
       if (currentAsync.hasValue) {
@@ -305,6 +313,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
         );
 
         var localNew = dbCandidates.where((t) {
+          if (!t.isVideo || t.mediaUrls.isEmpty) return false;
           return !seenIds.contains(t.id) &&
               (t.mediaUrls.isEmpty || !seenMedia.contains(t.mediaUrls.first));
         }).toList();
@@ -356,6 +365,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
           }
 
           final freshUnique = response.tweets.where((t) {
+            if (!t.isVideo || t.mediaUrls.isEmpty) return false;
             return !seenIds.contains(t.id) &&
                 (t.mediaUrls.isEmpty || !seenMedia.contains(t.mediaUrls.first));
           }).toList();

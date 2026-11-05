@@ -44,14 +44,16 @@ class PlayerPoolNotifier extends Notifier<Map<String, PlayerInstance>> {
 
   void cleanupExcept(Set<String> activeIds) {
     final newState = <String, PlayerInstance>{};
+    var didRemove = false;
     for (final entry in state.entries) {
       if (activeIds.contains(entry.key)) {
         newState[entry.key] = entry.value;
       } else {
         entry.value.dispose();
+        didRemove = true;
       }
     }
-    state = newState;
+    if (didRemove) state = newState;
   }
 }
 

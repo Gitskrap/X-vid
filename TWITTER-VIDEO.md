@@ -1,7 +1,20 @@
 # Twitter vidéo
 
-Fork Android libre de XFlow (MIT), centré sur les vidéos X/Twitter.
+Fork libre de [XFlow](https://github.com/Alchemist-Aloha/xflow) sous licence MIT, pour Android.
 
-En cours : filtrage des vidéos, optimisation du lecteur et génération d'un APK dans GitHub Actions.
+**Objectif :** navigation verticale façon TikTok, mais uniquement avec les vidéos de X/Twitter.
 
-Projet amont : https://github.com/Alchemist-Aloha/xflow
+## Bêta 0.1.0
+- Vidéos uniquement dans le fil, y compris pour les anciennes données en cache.
+- Interface sombre, nom Android « Twitter vidéo », identifiant indépendant `fr.twittervideo.client`.
+- Préparation des lecteurs limitée aux vidéos précédente, actuelle et suivante.
+- Évite les mises à jour du pool vidéo pendant le rendu Flutter.
+- Cache par défaut réduit à 250 Mo, chargement par lots plus petits.
+
+## APK Android
+Aller sur [Actions](https://github.com/Gitskrap/X-vid/actions/workflows/twitter-video-android.yml), sélectionner le dernier build réussi, puis télécharger **Twitter-video-Android-ARM64** ; décompresser le ZIP pour installer l'APK.
+
+L'application utilise les accès non officiels à X hérités de XFlow, qui peuvent cesser de fonctionner. Bêta non encore testée sur téléphone. Le build release utilise pour l'instant la signature *debug* héritée de XFlow : une signature persistante sera nécessaire pour les futures mises à jour. Aucune affiliation avec X Corp.
+
+## Licence
+Code originel : MIT © 2026 Alchemist-Aloha. Ce fork conserve la licence du projet amont et ses avis.

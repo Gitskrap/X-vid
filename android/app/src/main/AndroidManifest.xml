@@ -3,7 +3,7 @@
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     
     <application
-        android:label="xflow"
+        android:label="Twitter vidéo"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon"
         android:allowBackup="false"

@@ -1,5 +1,5 @@
 name: xflow
-description: TikTok-style player for Twitter/X media.
+description: Video-only Android client for X, based on XFlow.
 publish_to: 'none'
 version: 0.4.0+1
 

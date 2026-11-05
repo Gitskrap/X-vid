@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import '../player/player_pool_provider.dart';
 import 'feed_provider.dart';
 import '../player/widgets/media_container.dart';
@@ -23,6 +22,7 @@ class TiktokFeedScreen extends ConsumerStatefulWidget {
 class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
   final PageController _pageController = PageController();
   int _currentIndex = 0;
+  bool _poolUpdateScheduled = false;
 
   @override
   void initState() {
@@ -73,17 +73,13 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
       final pool = ref.read(playerPoolProvider.notifier);
       final activeIds = <String>{};
 
-      for (int i = _currentIndex - 1; i <= _currentIndex + 3; i++) {
+      for (int i = _currentIndex - 1; i <= _currentIndex + 1; i++) {
         if (i >= 0 && i < tweets.length) {
           final tweet = tweets[i];
           activeIds.add(tweet.id);
 
           if (tweet.isVideo && tweet.mediaUrls.isNotEmpty) {
             pool.warmup(tweet.id, tweet.mediaUrls.first);
-          } else if (tweet.mediaUrls.isNotEmpty) {
-            for (final url in tweet.mediaUrls) {
-              precacheImage(NetworkImage(url), context);
-            }
           }
         }
       }
@@ -93,51 +89,80 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
     }
   }
 
+  // Warm up outside of widget construction to avoid update loops.
+  void _schedulePoolWarmup() {
+    if (_poolUpdateScheduled) return;
+    _poolUpdateScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _poolUpdateScheduled = false;
+      if (mounted) _managePool();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final account = ref.watch(accountProvider);
-
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.refresh),
-          onPressed: () {
-            _pageController.jumpToPage(0);
-            ref.read(feedNotifierProvider.notifier).refresh();
-          },
-        ),
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SvgPicture.asset(
-              'assets/app_icon.svg',
-              height: 24,
-              width: 24,
-            ),
-            const SizedBox(width: 12),
-            const Text(
-              "XFlow",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        actions: [
-          if (account == null)
-            TextButton.icon(
-              onPressed: () => _goToLogin(),
-              icon: const Icon(Icons.login),
-              label: const Text('Login'),
-            ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (c) => const SettingsScreen()),
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          Positioned.fill(child: _buildMediaFeed()),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 12, 0),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+                      decoration: BoxDecoration(
+                        color: const Color(0xB814161A),
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.play_circle_fill_rounded, color: Color(0xFF70F0CE), size: 20),
+                          SizedBox(width: 8),
+                          Text('Twitter vidéo', style: TextStyle(fontWeight: FontWeight.w700, letterSpacing: 0.2)),
+                        ],
+                      ),
+                    ),
+                    const Spacer(),
+                    if (account == null)
+                      IconButton.filledTonal(
+                        tooltip: 'Connexion X',
+                        onPressed: _goToLogin,
+                        icon: const Icon(Icons.login_rounded),
+                      ),
+                    IconButton(
+                      tooltip: 'Actualiser',
+                      onPressed: () {
+                        if (_pageController.hasClients) _pageController.jumpToPage(0);
+                        ref.read(feedNotifierProvider.notifier).refresh();
+                      },
+                      icon: const Icon(Icons.refresh_rounded),
+                    ),
+                    IconButton(
+                      tooltip: 'Réglages',
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                      ),
+                      icon: const Icon(Icons.tune_rounded),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ],
       ),
-      body: _buildMediaFeed(),
     );
   }
 
@@ -167,7 +192,7 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
           }
           return _buildNoItemsState();
         }
-        _managePool();
+        _schedulePoolWarmup();
         return Stack(
           children: [
             PageView.builder(

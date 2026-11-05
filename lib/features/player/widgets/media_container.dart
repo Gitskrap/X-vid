@@ -48,6 +48,13 @@ class _TiktokMediaContainerState extends ConsumerState<TiktokMediaContainer> {
   @override
   void didUpdateWidget(TiktokMediaContainer oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.tweet.id != widget.tweet.id) {
+      _errorSubscription?.cancel();
+      _completedSubscription?.cancel();
+      _errorSubscription = null;
+      _completedSubscription = null;
+      _retryCount = 0;
+    }
     if (!oldWidget.isVisible && widget.isVisible) {
       _isAutoFullscreenDone = false;
     }
@@ -172,13 +179,19 @@ class _TiktokMediaContainerState extends ConsumerState<TiktokMediaContainer> {
       if (completed) _handleCompleted();
     });
 
-    if (widget.isVisible) {
-      instance.player.play();
-    } else {
-      instance.player.pause();
-    }
-
     final settings = ref.watch(settingsProvider);
+    final shouldPlay = widget.isVisible && settings.autoplay;
+    if (instance.player.state.playing != shouldPlay) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final nowShouldPlay = widget.isVisible && ref.read(settingsProvider).autoplay;
+        if (nowShouldPlay && !instance.player.state.playing) {
+          instance.player.play();
+        } else if (!nowShouldPlay && instance.player.state.playing) {
+          instance.player.pause();
+        }
+      });
+    }
     return PopScope(
       canPop: true,
       onPopInvokedWithResult: (didPop, result) async {

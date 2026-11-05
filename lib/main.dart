@@ -54,24 +54,24 @@ class XFlowApp extends ConsumerWidget {
     });
 
     return MaterialApp(
-      title: 'XFlow',
+      title: 'Twitter vidéo',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blue,
+          seedColor: const Color(0xFF70F0CE),
           brightness: Brightness.dark,
-          surface: Colors.black,
+          surface: const Color(0xFF070809),
         ),
-        scaffoldBackgroundColor: Colors.black,
+        scaffoldBackgroundColor: const Color(0xFF070809),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.black,
+          backgroundColor: const Color(0xFF070809),
           elevation: 0,
           centerTitle: true,
         ),
         navigationBarTheme: NavigationBarThemeData(
-          backgroundColor: Colors.black,
-          indicatorColor: Colors.blue.withValues(alpha: 0.2),
+          backgroundColor: const Color(0xF20D1012),
+          indicatorColor: const Color(0xFF70F0CE).withValues(alpha: 0.18),
           labelTextStyle: WidgetStateProperty.all(
             const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
           ),
@@ -142,6 +142,7 @@ class MainScaffold extends ConsumerWidget {
         }
       },
       child: Scaffold(
+        extendBody: true,
         body: body,
         bottomNavigationBar: NavigationBar(
           selectedIndex: nav.currentTab.index,
@@ -154,17 +155,17 @@ class MainScaffold extends ConsumerWidget {
           destinations: const [
             NavigationDestination(
               icon: Icon(Icons.video_library_outlined),
-              selectedIcon: Icon(Icons.video_library, color: Colors.blue),
-              label: 'Media',
+              selectedIcon: Icon(Icons.video_library, color: Color(0xFF70F0CE)),
+              label: 'Vidéos',
             ),
             NavigationDestination(
               icon: Icon(Icons.people_outline),
-              selectedIcon: Icon(Icons.people, color: Colors.blue),
-              label: 'Subscriptions',
+              selectedIcon: Icon(Icons.people, color: Color(0xFF70F0CE)),
+              label: 'Abonnements',
             ),
             NavigationDestination(
               icon: Icon(Icons.trending_up_outlined),
-              selectedIcon: Icon(Icons.trending_up, color: Colors.blue),
+              selectedIcon: Icon(Icons.trending_up, color: Color(0xFF70F0CE)),
               label: 'Hashtags',
             ),
           ],

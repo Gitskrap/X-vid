@@ -312,23 +312,11 @@ class PlaybackSettingsPage extends ConsumerWidget {
                 notifier.updateDiscoveryParam(playbackRetryLimit: v.toInt()),
           ),
           const Divider(),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text('Content Filters',
-                style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Wrap(
-              spacing: 8.0,
-              children: MediaFilter.values
-                  .map((f) => FilterChip(
-                        label: Text(f.name.toUpperCase()),
-                        selected: settings.filters.contains(f),
-                        onSelected: (_) => notifier.toggleFilter(f),
-                      ))
-                  .toList(),
-            ),
+          const ListTile(
+            leading: Icon(Icons.movie_filter_outlined),
+            title: Text('Vidéos uniquement'),
+            subtitle: Text('Photos et publications texte masquées'),
+            trailing: Icon(Icons.lock_outline, size: 18),
           ),
           const Divider(),
           _SliderSetting(
