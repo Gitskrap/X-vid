@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'features/feed/tiktok_feed_screen.dart';
+import 'features/security/biometric_gate.dart';
 import 'features/feed/hashtag_feed_screen.dart';
 import 'features/subscriptions/subscription_list_screen.dart';
 import 'features/profile/user_details_screen.dart';
@@ -77,7 +78,7 @@ class XFlowApp extends ConsumerWidget {
           ),
         ),
       ),
-      home: const MainScaffold(),
+      home: const BiometricGate(child: MainScaffold()),
     );
   }
 }
@@ -142,7 +143,7 @@ class MainScaffold extends ConsumerWidget {
         }
       },
       child: Scaffold(
-        extendBody: true,
+        extendBody: false,
         body: body,
         bottomNavigationBar: NavigationBar(
           selectedIndex: nav.currentTab.index,
