@@ -5,9 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_chrome_cast/flutter_chrome_cast.dart';
 
 import '../../core/models/tweet.dart';
+import 'local_video_proxy.dart';
 
-/// The remote receiver fetches ONLY the MP4 URL; it does not mirror the
-/// app's screen or receive tweet text, account data or cookies.
+/// The remote receiver fetches only MP4 bytes via an ephemeral LAN proxy.
+/// It receives no tweet text, cookies, account data or mirrored phone screen.
 final activeCastTweetProvider =
     NotifierProvider<ActiveCastTweetNotifier, String?>(
   ActiveCastTweetNotifier.new,
@@ -15,6 +16,7 @@ final activeCastTweetProvider =
 
 class ActiveCastTweetNotifier extends Notifier<String?> {
   StreamSubscription<GoogleCastSession?>? _sessionSubscription;
+  LocalVideoCastProxy? _proxy;
 
   /// Public Google-hosted MP4 for distinguishing connection failures from
   /// failures specific to Twitter's CDN, permissions or codecs.
@@ -24,7 +26,11 @@ class ActiveCastTweetNotifier extends Notifier<String?> {
 
   @override
   String? build() {
-    ref.onDispose(() => _sessionSubscription?.cancel());
+    ref.onDispose(() {
+      _sessionSubscription?.cancel();
+      final proxy = _proxy;
+      if (proxy != null) unawaited(proxy.close());
+    });
     return null;
   }
 
@@ -34,6 +40,9 @@ class ActiveCastTweetNotifier extends Notifier<String?> {
       if (session == null ||
           session.connectionState == GoogleCastConnectState.disconnected) {
         state = null;
+        final proxy = _proxy;
+        _proxy = null;
+        if (proxy != null) unawaited(proxy.close());
       }
     });
   }
@@ -42,11 +51,33 @@ class ActiveCastTweetNotifier extends Notifier<String?> {
     if (!tweet.isVideo || tweet.mediaUrls.isEmpty) {
       throw StateError('Cette publication ne comporte pas de vidéo.');
     }
-    final url = Uri.tryParse(tweet.mediaUrls.first);
-    if (url == null || url.scheme != 'https') {
-      throw StateError('Le format de cette URL vidéo est incompatible.');
+    final urls = tweet.mediaUrls
+        .map(Uri.tryParse)
+        .whereType<Uri>()
+        .where((url) => url.scheme == 'https' &&
+            url.host == 'video.twimg.com' &&
+            url.path.toLowerCase().endsWith('.mp4'))
+        .toList();
+
+    if (urls.isEmpty) {
+      throw StateError('Aucun flux MP4 Twitter utilisable pour cette vidéo.');
     }
-    await _cast(device, url, tweetId: tweet.id);
+    // The Twitter parser stores high bitrate first for the phone.
+    // Cast tries small, broadly compatible variants first.
+    final candidates = urls.reversed.take(3).toList();
+    Object? lastError;
+    for (final candidate in candidates) {
+      try {
+        await _cast(device, candidate, tweetId: tweet.id);
+        return;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw StateError(
+      'Aucune des qualités vidéo essayées n’a démarré sur la TV. '
+      'Dernière erreur : $lastError',
+    );
   }
 
   Future<void> playTest(GoogleCastDevice device) =>
@@ -58,6 +89,28 @@ class ActiveCastTweetNotifier extends Notifier<String?> {
     required String? tweetId,
   }) async {
     _watchSession();
+    // On the X route the television downloads from this phone, not from the
+    // X CDN. HTTP Range and browser-compatible CORS are forwarded locally.
+    Uri castUrl = videoUrl;
+    if (tweetId != null) {
+      final previous = _proxy;
+      _proxy = null;
+      if (previous != null) await previous.close();
+      final proxy = LocalVideoCastProxy();
+      _proxy = proxy;
+      try {
+        castUrl = await proxy.start(videoUrl);
+      } catch (_) {
+        _proxy = null;
+        await proxy.close();
+        rethrow;
+      }
+    } else {
+      final previous = _proxy;
+      _proxy = null;
+      if (previous != null) await previous.close();
+    }
+
     final sessions = GoogleCastSessionManager.instance;
 
     // Starting a Cast receiver and establishing a connected media session are
@@ -89,12 +142,11 @@ class ActiveCastTweetNotifier extends Notifier<String?> {
 
     final client = GoogleCastRemoteMediaClient.instance;
     final previousMediaSessionId = client.mediaStatus?.mediaSessionID;
-    // The receiver needs direct network access to the CDN. Never send the
-    // user's X authentication headers to the television.
+    // Never send user authentication headers to the Chromecast.
     await client.loadMedia(
       GoogleCastMediaInformationIOS(
-        contentId: videoUrl.toString(),
-        contentUrl: videoUrl,
+        contentId: castUrl.toString(),
+        contentUrl: castUrl,
         contentType: 'video/mp4',
         streamType: CastMediaStreamType.buffered,
         metadata: GoogleCastMovieMediaMetadata(
@@ -115,23 +167,25 @@ class ActiveCastTweetNotifier extends Notifier<String?> {
           onTimeout: (sink) => sink.addError(
             TimeoutException(
               'Le téléviseur ne confirme pas la lecture. '
-              'Vérifie son accès au fichier vidéo.',
+              '${_proxy?.diagnostics ?? 'Vérifie le réseau du Chromecast.'}',
             ),
           ),
         )
         .firstWhere((status) {
       if (status == null) return false;
       final info = status.mediaInformation;
-      final matches = info?.contentId == videoUrl.toString() ||
-          info?.contentUrl?.toString() == videoUrl.toString();
+      final matches = info?.contentId == castUrl.toString() ||
+          info?.contentUrl?.toString() == castUrl.toString();
       final isNew = previousMediaSessionId == null ||
           status.mediaSessionID != previousMediaSessionId;
 
       if (!matches && !isNew) return false;
       if (status.idleReason == GoogleCastMediaIdleReason.error) {
         throw StateError(
-          'Le Chromecast a signalé une erreur de lecture. '
-          'Le fichier peut être inaccessible depuis la TV ou incompatible.',
+          'Le Chromecast a refusé de lire la vidéo. '
+          '${_proxy?.diagnostics ?? 'Source ou codec incompatible.'} '
+          'Si aucune requête TV n’est indiquée, vérifie l’accès au '
+          'réseau local ; sinon, la vidéo peut être incompatible.',
         );
       }
       return status.playerState == CastMediaPlayerState.playing;
@@ -145,6 +199,9 @@ class ActiveCastTweetNotifier extends Notifier<String?> {
       await GoogleCastSessionManager.instance.endSessionAndStopCasting();
     } finally {
       state = null;
+      final proxy = _proxy;
+      _proxy = null;
+      if (proxy != null) await proxy.close();
     }
   }
 }
