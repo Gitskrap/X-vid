@@ -94,28 +94,6 @@ class ActiveCastTweetNotifier extends Notifier<String?> {
     required String? tweetId,
   }) async {
     _watchSession();
-    // On the X route the television downloads from this phone, not from the
-    // X CDN. HTTP Range and browser-compatible CORS are forwarded locally.
-    Uri castUrl = videoUrl;
-    if (tweetId != null) {
-      final previous = _proxy;
-      _proxy = null;
-      if (previous != null) await previous.close();
-      final proxy = LocalVideoCastProxy();
-      _proxy = proxy;
-      try {
-        castUrl = await proxy.start(videoUrl);
-      } catch (_) {
-        _proxy = null;
-        await proxy.close();
-        rethrow;
-      }
-    } else {
-      final previous = _proxy;
-      _proxy = null;
-      if (previous != null) await previous.close();
-    }
-
     final sessions = GoogleCastSessionManager.instance;
 
     // Starting a Cast receiver and establishing a connected media session are
@@ -143,6 +121,28 @@ class ActiveCastTweetNotifier extends Notifier<String?> {
                   session?.connectionState == GoogleCastConnectState.connected,
             );
       }
+    }
+
+    // On the X route the television downloads from this phone, not from the
+    // X CDN. HTTP Range and browser-compatible CORS are forwarded locally.
+    Uri castUrl = videoUrl;
+    if (tweetId != null) {
+      final previous = _proxy;
+      _proxy = null;
+      if (previous != null) await previous.close();
+      final proxy = LocalVideoCastProxy();
+      _proxy = proxy;
+      try {
+        castUrl = await proxy.start(videoUrl);
+      } catch (_) {
+        _proxy = null;
+        await proxy.close();
+        rethrow;
+      }
+    } else {
+      final previous = _proxy;
+      _proxy = null;
+      if (previous != null) await previous.close();
     }
 
     final client = GoogleCastRemoteMediaClient.instance;
