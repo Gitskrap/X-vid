@@ -27,42 +27,37 @@ class TweetTextOverlay extends ConsumerStatefulWidget {
 }
 
 class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
-  bool _isExpanded = false;
-
   @override
   Widget build(BuildContext context) {
-    final bottomPadding = widget.isFullscreen ? 48.0 : 24.0;
-    final rightPadding = widget.isFullscreen ? 24.0 : 12.0;
+    final bottomPadding = widget.isFullscreen ? 48.0 : 12.0;
+    final rightPadding = widget.isFullscreen ? 24.0 : 8.0;
 
     return Stack(
       children: [
         // Text Overlay (Bottom)
         Positioned(
-          bottom: 0,
-          left: 0,
-          right: 0,
+          bottom: bottomPadding,
+          left: 12,
+          right: widget.isFullscreen ? 100 : 78,
           child: Container(
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.transparent,
-                  Colors.black.withValues(alpha: 0.2),
-                  Colors.black.withValues(alpha: 0.5),
-                  Colors.black.withValues(alpha: 0.8),
-                ],
-                stops: const [0.0, 0.3, 0.6, 1.0],
-              ),
+              color: const Color(0xE91B1E23),
+              border: Border.all(color: const Color(0x70FFFFFF)),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: const [
+                BoxShadow(color: Colors.black54, blurRadius: 18, offset: Offset(0, 5)),
+              ],
             ),
-            padding: EdgeInsets.fromLTRB(16, 100, 80, bottomPadding),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 _buildUserHeader(context),
-                const SizedBox(height: 12),
-                _buildTweetText(),
+                if (widget.tweet.text.trim().isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  _buildTweetText(),
+                ],
               ],
             ),
           ),
@@ -70,7 +65,7 @@ class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
         // Action Buttons (Right Side)
         Positioned(
           right: rightPadding,
-          bottom: widget.isFullscreen ? 60 : 110,
+          bottom: widget.isFullscreen ? 60 : 24,
           child: _buildActionButtons(),
         ),
       ],
@@ -136,14 +131,14 @@ class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
     final subscriptionState = ref.watch(subscriptionListProvider);
     final isSubscribed = subscriptionState.isSubscribed(widget.tweet.userHandle);
 
-    String dateStr = "";
+    String dateStr = 'Date indisponible';
     if (widget.tweet.createdAt != null) {
       try {
         final date = widget.tweet.createdAt!.toLocal();
-        dateStr = " • ${DateFormat.yMMMd().add_Hm().format(date)}";
+        dateStr = 'Publié le ${DateFormat('dd/MM/yyyy · HH:mm').format(date)}';
       } catch (e) {
         AppLogger.log('XFLOW: Error formatting date: $e');
-        dateStr = " • ERR";
+        dateStr = 'Date indisponible';
       }
     }
 
@@ -204,9 +199,10 @@ class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
               ),
               if (dateStr.isNotEmpty)
                 Text(
-                  dateStr.replaceFirst(" • ", ""),
+                  dateStr,
                   style: const TextStyle(
-                    color: Colors.white70,
+                    color: const Color(0xFFE5ECF0),
+                    fontWeight: FontWeight.w600,
                     fontSize: 12,
                     shadows: [
                       Shadow(
@@ -240,6 +236,44 @@ class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
             tooltip: 'Subscribe',
           ),
       ],
+    );
+  }
+
+  void _showFullPost() {
+    final date = widget.tweet.createdAt == null
+        ? 'Date indisponible'
+        : 'Publié le ${DateFormat('dd/MM/yyyy à HH:mm').format(widget.tweet.createdAt!.toLocal())}';
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      backgroundColor: const Color(0xFF171A1F),
+      builder: (sheetContext) => ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.75,
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(22, 8, 22, 36),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.tweet.userHandle,
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 6),
+              Text(date, style: const TextStyle(color: Color(0xFFE1E6EA), fontSize: 14)),
+              const SizedBox(height: 22),
+              SelectableText(
+                widget.tweet.text,
+                style: const TextStyle(fontSize: 17, height: 1.5, color: Colors.white),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -307,11 +341,7 @@ class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
     }
 
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _isExpanded = !_isExpanded;
-        });
-      },
+      onTap: _showFullPost,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -328,17 +358,16 @@ class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
                 ],
               ),
             ),
-            maxLines: _isExpanded ? null : 3,
-            overflow:
-                _isExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
           ),
-          if (!_isExpanded && widget.tweet.text.length > 100)
+          if (widget.tweet.text.length > 100)
             const Padding(
               padding: EdgeInsets.only(top: 4.0),
               child: Text(
-                "Read more",
+                'Lire le tweet complet',
                 style: TextStyle(
-                  color: Colors.white70,
+                  color: Color(0xFF70F0CE),
                   fontWeight: FontWeight.bold,
                   fontSize: 13,
                 ),
