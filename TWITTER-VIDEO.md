@@ -38,3 +38,10 @@ Code originel : MIT © 2026 Alchemist-Aloha. Ce fork conserve la licence du proj
 - N'affiche la réussite qu'après confirmation de la lecture (état PLAYING remonté par le téléviseur).
 - Affiche les erreurs et délais d'attente dans le sélecteur Cast.
 - Bouton fiole sur chaque appareil pour tester un MP4 public Google, isolant les erreurs du lecteur Cast de celles des vidéos X.
+
+## Signature stable — à configurer une fois
+Les anciennes versions utilisaient une clé Android de debug différente à chaque build. Pour ne plus devoir désinstaller aux prochaines mises à jour, les builds nécessitent désormais la même clé de signature permanente. Ne publiez jamais cette clé ou son mot de passe.
+
+Dans le dépôt GitHub : Settings → Secrets and variables → Actions → New repository secret. Créer **ANDROID_KEYSTORE_BASE64** (valeur du fichier privé fourni) et **ANDROID_SIGNING_PASSWORD** (valeur du second fichier privé). Rejouer le workflow GitHub Actions après avoir configuré les deux secrets.
+
+Le fichier de clé original (.p12) et son mot de passe doivent être conservés à part, en lieu sûr. Une fois le premier APK signé avec cette clé installé, les versions suivantes pourront être installées sans perte de données à condition de préserver le même identifiant Android (`fr.twittervideo.client`), la même signature et d'incrémenter le numéro de version. Une **dernière désinstallation** de la 0.4.0 peut être nécessaire : la clé de debug originale de ses builds n'est plus disponible.

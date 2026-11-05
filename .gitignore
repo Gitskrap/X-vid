@@ -142,3 +142,7 @@ env/
 /docs/tutorial.md
 /docs/tutorial/*
 /api_response
+
+# Keep production Android signing credentials outside version control.
+/android/key.properties
+/android/twitter-video-release.p12
