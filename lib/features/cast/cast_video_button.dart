@@ -45,7 +45,7 @@ class ActiveCastTweetNotifier extends Notifier<String?> {
     await GoogleCastRemoteMediaClient.instance.loadMedia(
       GoogleCastMediaInformationIOS(
         contentId: videoUrl.toString(),
-        streamType: CastMediaStreamType.BUFFERED,
+        streamType: CastMediaStreamType.buffered,
         contentUrl: videoUrl,
         contentType: 'video/mp4',
         metadata: GoogleCastMovieMediaMetadata(
