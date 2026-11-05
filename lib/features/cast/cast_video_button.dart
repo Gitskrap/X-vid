@@ -39,10 +39,15 @@ class ActiveCastTweetNotifier extends Notifier<String?> {
         GoogleCastSessionManager.instance.currentSessionStream.listen((session) {
       if (session == null ||
           session.connectionState == GoogleCastConnectState.disconnected) {
+        // Initial connection transitions may briefly emit disconnected.
+        // Don't tear down the proxy before the TV requests its video.
+        final hadActivePlayback = state != null;
         state = null;
-        final proxy = _proxy;
-        _proxy = null;
-        if (proxy != null) unawaited(proxy.close());
+        if (hadActivePlayback) {
+          final proxy = _proxy;
+          _proxy = null;
+          if (proxy != null) unawaited(proxy.close());
+        }
       }
     });
   }
