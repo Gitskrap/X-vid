@@ -381,15 +381,19 @@ class _TiktokMediaContainerState extends ConsumerState<TiktokMediaContainer> {
                           }
                           return Stack(
                             children: [
-                              GestureDetector(
-                                onTap: () {
-                                  if (instance.player.state.playing) {
-                                    instance.player.pause();
-                                  } else {
-                                    instance.player.play();
-                                  }
-                                },
-                                behavior: HitTestBehavior.opaque,
+                              // A tap on the video opens immersive playback.
+                              // Controls layered above remain individually tappable.
+                              Positioned.fill(
+                                child: Semantics(
+                                  button: true,
+                                  label: 'Afficher la vidéo en plein écran',
+                                  child: GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: () {
+                                      onFullscreen();
+                                    },
+                                  ),
+                                ),
                               ),
                               if (widget.overlayBuilder != null)
                                 Positioned.fill(

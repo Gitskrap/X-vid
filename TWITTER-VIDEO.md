@@ -45,3 +45,10 @@ Les anciennes versions utilisaient une clé Android de debug différente à chaq
 Dans le dépôt GitHub : Settings → Secrets and variables → Actions → New repository secret. Créer **ANDROID_KEYSTORE_BASE64** (valeur du fichier privé fourni) et **ANDROID_SIGNING_PASSWORD** (valeur du second fichier privé). Rejouer le workflow GitHub Actions après avoir configuré les deux secrets.
 
 Le fichier de clé original (.p12) et son mot de passe doivent être conservés à part, en lieu sûr. Une fois le premier APK signé avec cette clé installé, les versions suivantes pourront être installées sans perte de données à condition de préserver le même identifiant Android (`fr.twittervideo.client`), la même signature et d'incrémenter le numéro de version. Une **dernière désinstallation** de la 0.4.0 peut être nécessaire : la clé de debug originale de ses builds n'est plus disponible.
+
+## Version 0.6.0 — toucher pour passer en plein écran
+- Un appui sur la zone de la vidéo ouvre le lecteur en plein écran, sans couper la lecture.
+- Orientation paysage automatique pour les vidéos horizontales et portrait pour les autres.
+- Les boutons d’interaction au-dessus de la vidéo restent cliquables et ne déclenchent pas le plein écran.
+- Retour avec le bouton quitter le plein écran du lecteur ou la navigation Android ; les commandes de lecture restent accessibles dans le lecteur plein écran.
+- Signature Android permanente identique à la version 0.5.0.
