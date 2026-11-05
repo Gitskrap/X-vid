@@ -189,7 +189,7 @@ class _ReplyTile extends ConsumerWidget {
                         size: 16, color: Colors.grey[400]),
                     const SizedBox(width: 4),
                     Text(
-                      _formatCount(tweet.favoriteCount),
+                      tweet.favoriteCountKnown ? _formatCount(tweet.favoriteCount) : '—',
                       style: TextStyle(color: Colors.grey[400], fontSize: 12),
                     ),
                   ],
