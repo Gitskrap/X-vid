@@ -63,6 +63,10 @@ class ActiveCastTweetNotifier extends Notifier<String?> {
     // Starting a Cast receiver and establishing a connected media session are
     // separate operations. Previously LOAD was fired immediately after
     // startSessionWithDevice(), and the receiver could still be connecting.
+    if (sessions.hasConnectedSession &&
+        sessions.currentSession?.device?.deviceID != device.deviceID) {
+      await sessions.endSessionAndStopCasting();
+    }
     if (!sessions.hasConnectedSession) {
       final accepted = await sessions.startSessionWithDevice(device);
       if (!accepted) {
@@ -133,7 +137,7 @@ class ActiveCastTweetNotifier extends Notifier<String?> {
       return status.playerState == CastMediaPlayerState.playing;
     });
 
-    state = tweetId;
+    state = tweetId ?? '__diagnostic__';
   }
 
   Future<void> stop() async {
@@ -256,7 +260,7 @@ class CastVideoButton extends ConsumerWidget {
                     ],
                     if (message != null) ...[
                       const SizedBox(height: 16),
-                      Text(
+                      SelectableText(
                         message!,
                         style: TextStyle(
                           color: isError
