@@ -11,6 +11,7 @@ import '../auth/login_screen.dart';
 import '../../core/client/account_provider.dart';
 import '../../core/navigation/navigation_provider.dart';
 import 'widgets/tweet_text_overlay.dart';
+import '../cast/cast_video_button.dart';
 
 class TiktokFeedScreen extends ConsumerStatefulWidget {
   const TiktokFeedScreen({super.key});
@@ -305,13 +306,14 @@ class TiktokFeedItem extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
+    final castedTweetId = ref.watch(activeCastTweetProvider);
 
     return RepaintBoundary(
       child: Stack(
         children: [
           TiktokMediaContainer(
             tweet: tweet,
-            isVisible: isVisible,
+            isVisible: isVisible && castedTweetId != tweet.id,
             autoFullscreen: autoFullscreen,
             overlayBuilder: (context, onFullscreen, isFullscreen) =>
                 TweetTextOverlay(

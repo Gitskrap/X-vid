@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
+import '../../cast/cast_video_button.dart';
 import '../../../core/models/tweet.dart';
 import '../../../core/navigation/navigation_provider.dart';
 import '../../../core/utils/app_logger.dart';
@@ -93,18 +94,7 @@ class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
           },
         ),
         const SizedBox(height: 16),
-        _ActionButton(
-          icon: Icons.share_outlined,
-          label: "Share",
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("Share functionality coming soon!"),
-                duration: Duration(seconds: 1),
-              ),
-            );
-          },
-        ),
+        CastVideoButton(tweet: widget.tweet),
         if (widget.onFullscreen != null && widget.tweet.isVideo) ...[
           const SizedBox(height: 16),
           _ActionButton(

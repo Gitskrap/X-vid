@@ -1,7 +1,7 @@
 name: xflow
 description: Video-only Android client for X, based on XFlow.
 publish_to: 'none'
-version: 0.3.0+3
+version: 0.4.0+4
 
 environment:
   sdk: '>=3.12.0 <4.0.0'
@@ -20,6 +20,7 @@ dependencies:
   path_provider: ^2.1.3
   shared_preferences: ^2.5.3
   local_auth: ^3.0.2
+  flutter_chrome_cast: ^2.0.0
   intl: ^0.20.2
 
   # Auth & Data Layer from Squawker

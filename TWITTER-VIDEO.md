@@ -24,3 +24,11 @@ Code originel : MIT © 2026 Alchemist-Aloha. Ce fork conserve la licence du proj
 - Date de secours extraite de l'identifiant Snowflake X, y compris pour les vidéos anciennes en cache.
 - Affichage de la date complète et de l'heure sur chaque commentaire.
 - Tests automatiques des conversions temporelles avant compilation.
+
+## Version 0.4.0 — Google Cast (bêta)
+- Bouton **Caster** sur chaque vidéo, remplaçant l'ancien bouton Partager qui n'était pas fonctionnel.
+- Recherche des Chromecast / TV Google Cast et sélection du récepteur.
+- Envoie uniquement l'URL HTTPS MP4 au récepteur standard Google Cast. **Pas de mirroring** du téléphone, aucun texte du tweet ni commentaire envoyé.
+- Lecture du flux sur le téléviseur, et pause de la même vidéo sur le téléphone ; arrêt de diffusion depuis le sélecteur.
+- Limitation importante : les URL X/Twitter protégées, temporaires ou nécessitant des cookies peuvent ne pas fonctionner sur le téléviseur. L'appareil Cast doit pouvoir accéder directement au CDN de X.
+- Bibliothèque : flutter_chrome_cast 2.0.0 (BSD-3-Clause).
