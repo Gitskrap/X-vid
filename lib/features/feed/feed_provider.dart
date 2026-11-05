@@ -563,6 +563,24 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
       }
       AppLogger.log('XFLOW: Failed to toggle like for $tweetId, reverted.');
     } else {
+      // X confirmed the action. Retain the state across app restarts without
+      // fabricating an absolute favorite count if X never supplied one.
+      final latest = state.value;
+      if (latest != null) {
+        final idx = latest.tweets.indexWhere((t) => t.id == tweetId);
+        if (idx >= 0) {
+          final confirmedTweet =
+              latest.tweets[idx].copyWith(isLikedKnown: true);
+          final list = List<Tweet>.from(latest.tweets);
+          list[idx] = confirmedTweet;
+          state = AsyncData(latest.copyWith(tweets: list));
+          try {
+            await Repository.insertCachedMedia([confirmedTweet]);
+          } catch (e) {
+            AppLogger.log('XFLOW: Could not cache confirmed like: $e');
+          }
+        }
+      }
       AppLogger.log(
           'XFLOW: Successfully toggled like for $tweetId to $newIsLiked');
     }

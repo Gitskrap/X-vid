@@ -89,7 +89,10 @@ class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
               final updated = await ref
                   .read(feedNotifierProvider.notifier)
                   .refreshVisibleEngagement(widget.tweet.id, force: true);
-              if (!updated) {
+              final latest = ref.read(feedNotifierProvider).value?.tweets
+                  .where((t) => t.id == widget.tweet.id)
+                  .firstOrNull;
+              if (!updated || latest == null || !latest.isLikedKnown) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
