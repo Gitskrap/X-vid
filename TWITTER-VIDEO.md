@@ -32,3 +32,9 @@ Code originel : MIT © 2026 Alchemist-Aloha. Ce fork conserve la licence du proj
 - Lecture du flux sur le téléviseur, et pause de la même vidéo sur le téléphone ; arrêt de diffusion depuis le sélecteur.
 - Limitation importante : les URL X/Twitter protégées, temporaires ou nécessitant des cookies peuvent ne pas fonctionner sur le téléviseur. L'appareil Cast doit pouvoir accéder directement au CDN de X.
 - Bibliothèque : flutter_chrome_cast 2.0.0 (BSD-3-Clause).
+
+## Version 0.5.0
+- Attend que la session Cast soit réellement connectée avant d'envoyer LOAD.
+- N'affiche la réussite qu'après confirmation de la lecture (état PLAYING remonté par le téléviseur).
+- Affiche les erreurs et délais d'attente dans le sélecteur Cast.
+- Bouton fiole sur chaque appareil pour tester un MP4 public Google, isolant les erreurs du lecteur Cast de celles des vidéos X.

@@ -6,9 +6,8 @@ import 'package:flutter_chrome_cast/flutter_chrome_cast.dart';
 
 import '../../core/models/tweet.dart';
 
-/// A successful Cast session plays only an MP4 URL on Google's Default Media
-/// Receiver. No phone screen, comments, post body or account credentials are
-/// sent to the TV. The receiving device downloads the URL on its own.
+/// The remote receiver fetches ONLY the MP4 URL; it does not mirror the
+/// app's screen or receive tweet text, account data or cookies.
 final activeCastTweetProvider =
     NotifierProvider<ActiveCastTweetNotifier, String?>(
   ActiveCastTweetNotifier.new,
@@ -17,48 +16,124 @@ final activeCastTweetProvider =
 class ActiveCastTweetNotifier extends Notifier<String?> {
   StreamSubscription<GoogleCastSession?>? _sessionSubscription;
 
+  /// Public Google-hosted MP4 for distinguishing connection failures from
+  /// failures specific to Twitter's CDN, permissions or codecs.
+  static final Uri testVideo = Uri.parse(
+    'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+  );
+
   @override
   String? build() {
     ref.onDispose(() => _sessionSubscription?.cancel());
     return null;
   }
 
-  void watchSession() {
-    _sessionSubscription ??= GoogleCastSessionManager
-        .instance.currentSessionStream.listen((session) {
-      if (session == null) state = null;
+  void _watchSession() {
+    _sessionSubscription ??=
+        GoogleCastSessionManager.instance.currentSessionStream.listen((session) {
+      if (session == null ||
+          session.connectionState == GoogleCastConnectState.disconnected) {
+        state = null;
+      }
     });
   }
 
   Future<void> play(Tweet tweet, GoogleCastDevice device) async {
     if (!tweet.isVideo || tweet.mediaUrls.isEmpty) {
-      throw StateError('Aucun fichier vidéo disponible.');
+      throw StateError('Cette publication ne comporte pas de vidéo.');
     }
-    final videoUrl = Uri.tryParse(tweet.mediaUrls.first);
-    if (videoUrl == null || videoUrl.scheme != 'https') {
-      throw StateError('URL de vidéo incompatible avec Google Cast.');
+    final url = Uri.tryParse(tweet.mediaUrls.first);
+    if (url == null || url.scheme != 'https') {
+      throw StateError('Le format de cette URL vidéo est incompatible.');
     }
-    watchSession();
+    await _cast(device, url, tweetId: tweet.id);
+  }
 
-    // The TV makes a separate HTTPS request to X's CDN. No auth cookies.
-    await GoogleCastSessionManager.instance.startSessionWithDevice(device);
-    await GoogleCastRemoteMediaClient.instance.loadMedia(
+  Future<void> playTest(GoogleCastDevice device) =>
+      _cast(device, testVideo, tweetId: null);
+
+  Future<void> _cast(
+    GoogleCastDevice device,
+    Uri videoUrl, {
+    required String? tweetId,
+  }) async {
+    _watchSession();
+    final sessions = GoogleCastSessionManager.instance;
+
+    // Starting a Cast receiver and establishing a connected media session are
+    // separate operations. Previously LOAD was fired immediately after
+    // startSessionWithDevice(), and the receiver could still be connecting.
+    if (!sessions.hasConnectedSession) {
+      final accepted = await sessions.startSessionWithDevice(device);
+      if (!accepted) {
+        throw StateError('Le Chromecast a refusé la connexion.');
+      }
+      if (!sessions.hasConnectedSession) {
+        await sessions.currentSessionStream
+            .timeout(
+              const Duration(seconds: 25),
+              onTimeout: (sink) => sink.addError(
+                TimeoutException('La connexion au téléviseur a expiré.'),
+              ),
+            )
+            .firstWhere(
+              (session) =>
+                  session?.connectionState == GoogleCastConnectState.connected,
+            );
+      }
+    }
+
+    final client = GoogleCastRemoteMediaClient.instance;
+    final previousMediaSessionId = client.mediaStatus?.mediaSessionID;
+    // The receiver needs direct network access to the CDN. Never send the
+    // user's X authentication headers to the television.
+    await client.loadMedia(
       GoogleCastMediaInformationIOS(
         contentId: videoUrl.toString(),
-        streamType: CastMediaStreamType.buffered,
         contentUrl: videoUrl,
         contentType: 'video/mp4',
+        streamType: CastMediaStreamType.buffered,
         metadata: GoogleCastMovieMediaMetadata(
-          title: 'Vidéo',
+          title: tweetId == null ? 'Vidéo de test' : 'Vidéo',
           studio: 'Twitter vidéo',
-          releaseDate: tweet.createdAt ?? DateTime.now(),
+          releaseDate: DateTime.now(),
         ),
       ),
       autoPlay: true,
       playPosition: Duration.zero,
     );
 
-    state = tweet.id;
+    // loadMedia only acknowledges sending a request. Do not report success or
+    // pause the local player until the receiver confirms real playback.
+    await client.mediaStatusStream
+        .timeout(
+          const Duration(seconds: 25),
+          onTimeout: (sink) => sink.addError(
+            TimeoutException(
+              'Le téléviseur ne confirme pas la lecture. '
+              'Vérifie son accès au fichier vidéo.',
+            ),
+          ),
+        )
+        .firstWhere((status) {
+      if (status == null) return false;
+      final info = status.mediaInformation;
+      final matches = info?.contentId == videoUrl.toString() ||
+          info?.contentUrl?.toString() == videoUrl.toString();
+      final isNew = previousMediaSessionId == null ||
+          status.mediaSessionID != previousMediaSessionId;
+
+      if (!matches && !isNew) return false;
+      if (status.idleReason == GoogleCastMediaIdleReason.error) {
+        throw StateError(
+          'Le Chromecast a signalé une erreur de lecture. '
+          'Le fichier peut être inaccessible depuis la TV ou incompatible.',
+        );
+      }
+      return status.playerState == CastMediaPlayerState.playing;
+    });
+
+    state = tweetId;
   }
 
   Future<void> stop() async {
@@ -70,10 +145,8 @@ class ActiveCastTweetNotifier extends Notifier<String?> {
   }
 }
 
-/// Google Cast is Android-only for this fork.
 class CastVideoButton extends ConsumerWidget {
   const CastVideoButton({super.key, required this.tweet});
-
   final Tweet tweet;
 
   static Future<void>? _initializing;
@@ -82,7 +155,8 @@ class CastVideoButton extends ConsumerWidget {
     _initializing ??= GoogleCastContext.instance.setSharedInstanceWithOptions(
       GoogleCastOptionsAndroid(
         appId: GoogleCastDiscoveryCriteria.kDefaultApplicationId,
-        stopCastingOnAppTerminated: true,
+        stopCastingOnAppTerminated: false,
+        suspendSessionsWhenBackgrounded: false,
       ),
     );
     try {
@@ -98,10 +172,10 @@ class CastVideoButton extends ConsumerWidget {
     if (!tweet.isVideo || tweet.mediaUrls.isEmpty) return;
     try {
       await _ensureInitialized();
-    } catch (_) {
+    } catch (error) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Google Cast indisponible sur cet appareil.')),
+        SnackBar(content: Text('Cast non disponible : $error')),
       );
       return;
     }
@@ -111,114 +185,169 @@ class CastVideoButton extends ConsumerWidget {
       context: context,
       useSafeArea: true,
       showDragHandle: true,
+      isScrollControlled: true,
       backgroundColor: const Color(0xFF171A1F),
-      builder: (sheetContext) => SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Caster la vidéo',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Seule la vidéo sera envoyée au téléviseur, sans les textes ni les commentaires.',
-                style: TextStyle(fontSize: 13, color: Color(0xFFD0D8DD)),
-              ),
-              const SizedBox(height: 16),
-              StreamBuilder<List<GoogleCastDevice>>(
-                stream: GoogleCastDiscoveryManager.instance.devicesStream,
-                builder: (context, snapshot) {
-                  final devices = snapshot.data ?? const <GoogleCastDevice>[];
-                  if (devices.isEmpty) {
-                    return const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24),
-                      child: Center(
-                        child: Text(
-                          'Aucun Chromecast détecté. Vérifie que le téléphone et le téléviseur sont sur le même Wi-Fi.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Color(0xFFD0D8DD)),
+      builder: (sheetContext) {
+        var busy = false;
+        String? message;
+        var isError = false;
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            Future<void> castTo(
+              GoogleCastDevice device, {
+              required bool diagnostic,
+            }) async {
+              if (busy) return;
+              setSheetState(() {
+                busy = true;
+                isError = false;
+                message = diagnostic
+                    ? 'Connexion et lecture de la vidéo de test…'
+                    : 'Connexion puis chargement de la vidéo X…';
+              });
+              try {
+                if (diagnostic) {
+                  await ref.read(activeCastTweetProvider.notifier).playTest(device);
+                } else {
+                  await ref.read(activeCastTweetProvider.notifier).play(tweet, device);
+                }
+                if (!sheetContext.mounted) return;
+                setSheetState(() {
+                  message = diagnostic
+                      ? 'Test réussi : le Cast fonctionne. Si la vidéo X échoue, '
+                          'le problème vient probablement de son URL ou de son codec.'
+                      : 'Lecture confirmée par le téléviseur.';
+                  isError = false;
+                });
+              } catch (error) {
+                if (!sheetContext.mounted) return;
+                setSheetState(() {
+                  isError = true;
+                  message = diagnostic
+                      ? 'Test Cast échoué : $error'
+                      : 'Vidéo X non lue : $error\n\n'
+                          'Teste le bouton de contrôle sur le même appareil pour '
+                          'distinguer la connexion Cast de la lecture du flux X.';
+                });
+              } finally {
+                if (sheetContext.mounted) setSheetState(() => busy = false);
+              }
+            }
+
+            return SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 6, 20, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Caster uniquement la vidéo',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Sans texte, commentaires ni copie de l’écran.',
+                      style: TextStyle(color: Color(0xFFD0D8DD)),
+                    ),
+                    if (busy) ...[
+                      const SizedBox(height: 16),
+                      const LinearProgressIndicator(minHeight: 3),
+                    ],
+                    if (message != null) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        message!,
+                        style: TextStyle(
+                          color: isError
+                              ? const Color(0xFFFFB4AB)
+                              : const Color(0xFF70F0CE),
+                          fontSize: 13,
+                          height: 1.4,
                         ),
                       ),
-                    );
-                  }
-                  return ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: MediaQuery.sizeOf(context).height * 0.45,
-                    ),
-                    child: ListView(
-                      shrinkWrap: true,
-                      children: [
-                        for (final device in devices)
-                          ListTile(
-                            leading: const Icon(Icons.cast_connected_rounded),
-                            title: Text(device.friendlyName),
-                            subtitle: const Text('Google Cast'),
-                            onTap: () async {
-                              Navigator.pop(sheetContext);
-                              try {
-                                await ref.read(activeCastTweetProvider.notifier)
-                                    .play(tweet, device);
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Lecture envoyée au téléviseur.',
-                                      ),
-                                    ),
-                                  );
-                                }
-                              } catch (_) {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'La vidéo n’a pas pu être diffusée. '
-                                        'Certaines URL de X ne sont pas lisibles sur Chromecast.',
-                                      ),
-                                    ),
-                                  );
-                                }
-                              }
-                            },
+                    ],
+                    const SizedBox(height: 14),
+                    StreamBuilder<List<GoogleCastDevice>>(
+                      stream: GoogleCastDiscoveryManager.instance.devicesStream,
+                      builder: (context, snapshot) {
+                        final devices = snapshot.data ?? const <GoogleCastDevice>[];
+                        if (devices.isEmpty) {
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 18),
+                            child: Text(
+                              'Aucun Chromecast trouvé. Vérifie le même Wi-Fi.',
+                              style: TextStyle(color: Color(0xFFD0D8DD)),
+                            ),
+                          );
+                        }
+                        return ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight: MediaQuery.sizeOf(context).height * 0.45,
                           ),
-                      ],
+                          child: ListView(
+                            shrinkWrap: true,
+                            children: [
+                              for (final device in devices)
+                                ListTile(
+                                  enabled: !busy,
+                                  leading: const Icon(Icons.cast_connected_rounded),
+                                  title: Text(device.friendlyName),
+                                  subtitle: const Text('Lire la vidéo X'),
+                                  onTap: () => castTo(device, diagnostic: false),
+                                  trailing: IconButton(
+                                    onPressed: busy
+                                        ? null
+                                        : () => castTo(device, diagnostic: true),
+                                    tooltip: 'Tester avec une vidéo MP4 publique',
+                                    icon: const Icon(Icons.science_outlined),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
+                    const Text(
+                      'Le bouton fiole teste le Cast avec une vidéo publique. '
+                      'Aucun compte X n’est nécessaire pour ce test.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFFB5BEC3)),
+                    ),
+                    Consumer(
+                      builder: (context, innerRef, _) {
+                        final active = innerRef.watch(activeCastTweetProvider);
+                        if (active == null) return const SizedBox.shrink();
+                        return TextButton.icon(
+                          onPressed: () async {
+                            await innerRef.read(activeCastTweetProvider.notifier).stop();
+                            if (sheetContext.mounted) {
+                              setSheetState(() {
+                                message = 'Diffusion arrêtée.';
+                                isError = false;
+                              });
+                            }
+                          },
+                          icon: const Icon(Icons.stop_circle_outlined),
+                          label: const Text('Arrêter la diffusion'),
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
-              Consumer(
-                builder: (context, innerRef, _) {
-                  final active = innerRef.watch(activeCastTweetProvider);
-                  if (active == null) return const SizedBox.shrink();
-                  return TextButton.icon(
-                    onPressed: () async {
-                      await innerRef.read(activeCastTweetProvider.notifier).stop();
-                      if (sheetContext.mounted) Navigator.pop(sheetContext);
-                    },
-                    icon: const Icon(Icons.stop_circle_outlined),
-                    label: const Text('Arrêter la diffusion'),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final activeId = ref.watch(activeCastTweetProvider);
-    final isCastingThis = activeId == tweet.id;
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+    final isCastingThis = ref.watch(activeCastTweetProvider) == tweet.id;
+    return InkWell(
+      borderRadius: BorderRadius.circular(24),
       onTap: () => _openCastPicker(context, ref),
       child: SizedBox(
         width: 60,
@@ -229,9 +358,7 @@ class CastVideoButton extends ConsumerWidget {
               isCastingThis ? Icons.cast_connected_rounded : Icons.cast_rounded,
               color: isCastingThis ? const Color(0xFF70F0CE) : Colors.white,
               size: 32,
-              shadows: const [
-                Shadow(color: Colors.black, blurRadius: 4),
-              ],
+              shadows: const [Shadow(color: Colors.black, blurRadius: 4)],
             ),
             const SizedBox(height: 4),
             const Text(
@@ -240,7 +367,6 @@ class CastVideoButton extends ConsumerWidget {
                 color: Colors.white,
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                shadows: [Shadow(color: Colors.black, blurRadius: 4)],
               ),
             ),
           ],
