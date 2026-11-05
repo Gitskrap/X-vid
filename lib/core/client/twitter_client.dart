@@ -1365,24 +1365,19 @@ class TwitterClient {
         }
       }
 
-      DateTime? createdAt;
-      if (legacy['created_at'] != null) {
-        createdAt = parseTwitterDateTime(legacy['created_at'].toString());
-      } else if (legacy['created_at_ms'] != null) {
-        try {
-          final ms = int.tryParse(legacy['created_at_ms'].toString());
-          if (ms != null) {
-            createdAt = DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
-          }
-        } catch (e) {
-          AppLogger.log(
-              'XFLOW: Error parsing date_ms ${legacy['created_at_ms']}: $e');
-        }
-      }
-
+      // X can omit legacy dates. The Snowflake ID provides a reliable
+      // timestamp for modern numeric tweet identifiers.
+      final createdAt = parseTwitterDateTime(
+            legacy['created_at']?.toString() ??
+                tweetResult['created_at']?.toString(),
+          ) ??
+          parseTwitterDateTime(
+            legacy['created_at_ms']?.toString() ??
+                tweetResult['created_at_ms']?.toString(),
+          ) ??
+          tweetDateFromSnowflakeId(tweetId);
       if (createdAt == null) {
-        AppLogger.log(
-            'XFLOW: No date found in legacy: ${legacy.keys.toList()}');
+        AppLogger.log('XFLOW: Unavailable date for tweet $tweetId');
       }
 
       tweets.add(Tweet(

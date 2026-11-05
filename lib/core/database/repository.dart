@@ -216,9 +216,17 @@ class Repository {
           'is_video': tweet.isVideo ? 1 : 0,
           'created_at': tweet.createdAt?.millisecondsSinceEpoch,
         },
-        conflictAlgorithm: ConflictAlgorithm
-            .ignore, // Don't overwrite play counts if already exists
+        conflictAlgorithm: ConflictAlgorithm.ignore,
       );
+      // Repair a missing cached date without overwriting playback history.
+      if (tweet.createdAt != null) {
+        batch.update(
+          tableCachedMedia,
+          {'created_at': tweet.createdAt!.millisecondsSinceEpoch},
+          where: 'id = ? AND created_at IS NULL',
+          whereArgs: [tweet.id],
+        );
+      }
     }
     await batch.commit(noResult: true);
   }

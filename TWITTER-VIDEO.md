@@ -18,3 +18,9 @@ L'application utilise les accès non officiels à X hérités de XFlow, qui peuv
 
 ## Licence
 Code originel : MIT © 2026 Alchemist-Aloha. Ce fork conserve la licence du projet amont et ses avis.
+
+## Version 0.3.0
+- Lecture fiable des dates Twitter (format classique, ISO 8601 et epoch millisecondes).
+- Date de secours extraite de l'identifiant Snowflake X, y compris pour les vidéos anciennes en cache.
+- Affichage de la date complète et de l'heure sur chaque commentaire.
+- Tests automatiques des conversions temporelles avant compilation.

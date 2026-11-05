@@ -1,3 +1,5 @@
+import '../utils/date_utils.dart';
+
 class Tweet {
   final String id;
   final String text;
@@ -22,12 +24,12 @@ class Tweet {
     required this.mediaUrls,
     this.thumbnailUrl,
     this.isVideo = false,
-    this.createdAt,
+    DateTime? createdAt,
     this.source,
     this.isLiked = false,
     this.favoriteCount = 0,
     this.replyCount = 0,
-  });
+  }) : createdAt = createdAt ?? tweetDateFromSnowflakeId(id);
 
   String? get userAvatarUrlHighRes {
     if (userAvatarUrl == null) return null;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:intl/intl.dart';
 import '../../core/models/tweet.dart';
 import '../../core/client/twitter_client.dart';
 import '../../core/navigation/navigation_provider.dart';
@@ -62,7 +63,7 @@ class TweetRepliesSheet extends ConsumerWidget {
                 child: Row(
                   children: [
                     Text(
-                      'Replies',
+                      'Commentaires',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
@@ -89,7 +90,7 @@ class TweetRepliesSheet extends ConsumerWidget {
                           Padding(
                             padding: EdgeInsets.all(48.0),
                             child: Center(
-                              child: Text('No replies yet'),
+                              child: Text('Aucun commentaire pour le moment'),
                             ),
                           ),
                         ],
@@ -165,7 +166,18 @@ class _ReplyTile extends ConsumerWidget {
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
+                Text(
+                  tweet.createdAt == null
+                      ? 'Date indisponible'
+                      : 'Publié le ${DateFormat('dd/MM/yyyy à HH:mm').format(tweet.createdAt!.toLocal())}',
+                  style: const TextStyle(
+                    color: Color(0xFFE1E6EA),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 7),
                 Text(
                   tweet.text,
                   style: const TextStyle(fontSize: 15),
