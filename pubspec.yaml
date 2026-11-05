@@ -36,7 +36,7 @@ dependencies:
 # while the upstream Flutter/AGP 9.0 application builds with compileSdk 36.
 # Remove this override after an Android Gradle plugin / SDK upgrade.
 dependency_overrides:
-  permission_handler_android: 13.0.2
+  permission_handler_android: 13.0.1
 
 dev_dependencies:
   flutter_test:
