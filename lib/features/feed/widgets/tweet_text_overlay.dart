@@ -80,7 +80,9 @@ class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
         _ActionButton(
           icon: widget.tweet.isLiked ? Icons.favorite : Icons.favorite_border,
           color: widget.tweet.isLiked ? Colors.red : Colors.white,
-          label: _formatCount(widget.tweet.favoriteCount),
+          label: widget.tweet.favoriteCountKnown
+              ? _formatCount(widget.tweet.favoriteCount)
+              : '—',
           onTap: () {
             ref.read(feedNotifierProvider.notifier).toggleLike(widget.tweet.id);
           },
@@ -88,7 +90,9 @@ class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
         const SizedBox(height: 16),
         _ActionButton(
           icon: Icons.chat_bubble_outline,
-          label: _formatCount(widget.tweet.replyCount),
+          label: widget.tweet.replyCountKnown
+              ? _formatCount(widget.tweet.replyCount)
+              : '—',
           onTap: () {
             TweetRepliesSheet.show(context, widget.tweet);
           },

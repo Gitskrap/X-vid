@@ -14,6 +14,10 @@ class Tweet {
   final bool isLiked;
   final int favoriteCount;
   final int replyCount;
+  // Unknown metrics are distinct from real zero counts.
+  final bool favoriteCountKnown;
+  final bool replyCountKnown;
+  final bool isLikedKnown;
 
   Tweet({
     required this.id,
@@ -29,6 +33,9 @@ class Tweet {
     this.isLiked = false,
     this.favoriteCount = 0,
     this.replyCount = 0,
+    this.favoriteCountKnown = false,
+    this.replyCountKnown = false,
+    this.isLikedKnown = false,
   }) : createdAt = createdAt ?? tweetDateFromSnowflakeId(id);
 
   String? get userAvatarUrlHighRes {
@@ -50,6 +57,9 @@ class Tweet {
     bool? isLiked,
     int? favoriteCount,
     int? replyCount,
+    bool? favoriteCountKnown,
+    bool? replyCountKnown,
+    bool? isLikedKnown,
   }) {
     return Tweet(
       id: id ?? this.id,
@@ -65,6 +75,9 @@ class Tweet {
       isLiked: isLiked ?? this.isLiked,
       favoriteCount: favoriteCount ?? this.favoriteCount,
       replyCount: replyCount ?? this.replyCount,
+      favoriteCountKnown: favoriteCountKnown ?? this.favoriteCountKnown,
+      replyCountKnown: replyCountKnown ?? this.replyCountKnown,
+      isLikedKnown: isLikedKnown ?? this.isLikedKnown,
     );
   }
 }

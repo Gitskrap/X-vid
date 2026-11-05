@@ -30,7 +30,7 @@ class Repository {
     }
     return await openDatabase(
       path,
-      version: 9,
+      version: 10,
       onCreate: (db, version) async {
         await db.execute(
           'CREATE TABLE $tableAccounts (id TEXT PRIMARY KEY, screen_name TEXT, rest_id TEXT, auth_header TEXT)',
@@ -52,6 +52,9 @@ class Repository {
             thumbnail_url TEXT,
             is_video INTEGER,
             created_at INTEGER,
+            favorite_count INTEGER,
+            reply_count INTEGER,
+            is_liked INTEGER,
             played_count INTEGER DEFAULT 0,
             last_played_at INTEGER,
             duration_watched INTEGER DEFAULT 0,
@@ -124,6 +127,15 @@ class Repository {
               'ALTER TABLE $tableCachedMedia ADD COLUMN last_suggested_at INTEGER');
           await db.execute(
               'CREATE INDEX IF NOT EXISTS idx_suggested ON $tableCachedMedia (last_suggested_at)');
+        }
+        if (oldVersion < 10) {
+          // Nullable columns: NULL means the value has never been retrieved.
+          await db.execute(
+            'ALTER TABLE $tableCachedMedia ADD COLUMN favorite_count INTEGER');
+          await db.execute(
+            'ALTER TABLE $tableCachedMedia ADD COLUMN reply_count INTEGER');
+          await db.execute(
+            'ALTER TABLE $tableCachedMedia ADD COLUMN is_liked INTEGER');
         }
       },
     );
@@ -215,15 +227,32 @@ class Repository {
           'thumbnail_url': tweet.thumbnailUrl,
           'is_video': tweet.isVideo ? 1 : 0,
           'created_at': tweet.createdAt?.millisecondsSinceEpoch,
+          'favorite_count': tweet.favoriteCountKnown ? tweet.favoriteCount : null,
+          'reply_count': tweet.replyCountKnown ? tweet.replyCount : null,
+          'is_liked': tweet.isLikedKnown ? (tweet.isLiked ? 1 : 0) : null,
         },
         conflictAlgorithm: ConflictAlgorithm.ignore,
       );
-      // Repair a missing cached date without overwriting playback history.
+      // Update only newly retrieved metadata. Keep played_count, history and
+      // any reliable previously cached metric if X omitted it this time.
+      final updates = <String, Object?>{};
+      if (tweet.favoriteCountKnown) {
+        updates['favorite_count'] = tweet.favoriteCount;
+      }
+      if (tweet.replyCountKnown) {
+        updates['reply_count'] = tweet.replyCount;
+      }
+      if (tweet.isLikedKnown) {
+        updates['is_liked'] = tweet.isLiked ? 1 : 0;
+      }
       if (tweet.createdAt != null) {
+        updates['created_at'] = tweet.createdAt!.millisecondsSinceEpoch;
+      }
+      if (updates.isNotEmpty) {
         batch.update(
           tableCachedMedia,
-          {'created_at': tweet.createdAt!.millisecondsSinceEpoch},
-          where: 'id = ? AND created_at IS NULL',
+          updates,
+          where: 'id = ?',
           whereArgs: [tweet.id],
         );
       }
@@ -283,6 +312,12 @@ class Repository {
             List<String>.from(jsonDecode(maps[i]['media_urls'] as String)),
         thumbnailUrl: maps[i]['thumbnail_url'] as String?,
         isVideo: (maps[i]['is_video'] as int) == 1,
+        favoriteCount: (maps[i]['favorite_count'] as int?) ?? 0,
+        replyCount: (maps[i]['reply_count'] as int?) ?? 0,
+        isLiked: maps[i]['is_liked'] == 1,
+        favoriteCountKnown: maps[i]['favorite_count'] != null,
+        replyCountKnown: maps[i]['reply_count'] != null,
+        isLikedKnown: maps[i]['is_liked'] != null,
         createdAt: maps[i]['created_at'] != null
             ? DateTime.fromMillisecondsSinceEpoch(maps[i]['created_at'] as int)
             : null,
@@ -351,6 +386,12 @@ class Repository {
             List<String>.from(jsonDecode(maps[i]['media_urls'] as String)),
         thumbnailUrl: maps[i]['thumbnail_url'] as String?,
         isVideo: (maps[i]['is_video'] as int) == 1,
+        favoriteCount: (maps[i]['favorite_count'] as int?) ?? 0,
+        replyCount: (maps[i]['reply_count'] as int?) ?? 0,
+        isLiked: maps[i]['is_liked'] == 1,
+        favoriteCountKnown: maps[i]['favorite_count'] != null,
+        replyCountKnown: maps[i]['reply_count'] != null,
+        isLikedKnown: maps[i]['is_liked'] != null,
         createdAt: maps[i]['created_at'] != null
             ? DateTime.fromMillisecondsSinceEpoch(maps[i]['created_at'] as int)
             : null,
@@ -448,6 +489,12 @@ class Repository {
             List<String>.from(jsonDecode(maps[i]['media_urls'] as String)),
         thumbnailUrl: maps[i]['thumbnail_url'] as String?,
         isVideo: (maps[i]['is_video'] as int) == 1,
+        favoriteCount: (maps[i]['favorite_count'] as int?) ?? 0,
+        replyCount: (maps[i]['reply_count'] as int?) ?? 0,
+        isLiked: maps[i]['is_liked'] == 1,
+        favoriteCountKnown: maps[i]['favorite_count'] != null,
+        replyCountKnown: maps[i]['reply_count'] != null,
+        isLikedKnown: maps[i]['is_liked'] != null,
         createdAt: maps[i]['created_at'] != null
             ? DateTime.fromMillisecondsSinceEpoch(maps[i]['created_at'] as int)
             : null,
@@ -501,6 +548,12 @@ class Repository {
             List<String>.from(jsonDecode(maps[i]['media_urls'] as String)),
         thumbnailUrl: maps[i]['thumbnail_url'] as String?,
         isVideo: (maps[i]['is_video'] as int) == 1,
+        favoriteCount: (maps[i]['favorite_count'] as int?) ?? 0,
+        replyCount: (maps[i]['reply_count'] as int?) ?? 0,
+        isLiked: maps[i]['is_liked'] == 1,
+        favoriteCountKnown: maps[i]['favorite_count'] != null,
+        replyCountKnown: maps[i]['reply_count'] != null,
+        isLikedKnown: maps[i]['is_liked'] != null,
         createdAt: maps[i]['created_at'] != null
             ? DateTime.fromMillisecondsSinceEpoch(maps[i]['created_at'] as int)
             : null,

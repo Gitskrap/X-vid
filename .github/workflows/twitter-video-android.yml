@@ -24,8 +24,8 @@ jobs:
         run: flutter pub get
       - name: Analyze app
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
-      - name: Test timestamp parsing
-        run: flutter test test/core/utils/date_utils_test.dart
+      - name: Test timestamp and engagement parsing
+        run: flutter test test/core/utils/date_utils_test.dart test/core/utils/engagement_utils_test.dart
       - name: Restore permanent signing key
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -41,13 +41,13 @@ jobs:
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/twitter-video-release.p12
           printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=twittervideo\nstoreFile=../twitter-video-release.p12\n' "$ANDROID_SIGNING_PASSWORD" "$ANDROID_SIGNING_PASSWORD" > android/key.properties
       - name: Build release ARM64
-        run: flutter build apk --release --target-platform android-arm64 --build-name 0.7.0 --build-number 7
+        run: flutter build apk --release --target-platform android-arm64 --build-name 0.8.0 --build-number 8
       - name: Name APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk Twitter-video-0.7.0-arm64.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk Twitter-video-0.8.0-arm64.apk
       - uses: actions/upload-artifact@v4
         with:
           name: Twitter-video-Android-ARM64
-          path: Twitter-video-0.7.0-arm64.apk
+          path: Twitter-video-0.8.0-arm64.apk
           if-no-files-found: error
           retention-days: 30
       - name: Clear local signing material

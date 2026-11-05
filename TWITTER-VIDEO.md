@@ -58,3 +58,9 @@ Le fichier de clé original (.p12) et son mot de passe doivent être conservés 
 - Cast via passerelle HTTP temporaire sur le Wi-Fi local du téléphone, limitée aux MP4 de Twitter (pas de recopie de l'écran, ni transmission des cookies X).
 - Transmission HTTP avec Range/CORS pour faciliter le chargement par la TV ; variantes vidéo de qualité inférieure proposées en cas d'incompatibilité.
 - Le Cast ne peut pas fonctionner si les appareils ne communiquent pas directement sur le Wi-Fi (réseau invité, isolation des clients), si la connexion X est privée, ou si le codec n'est pas pris en charge.
+
+## Version 0.8.0 — Compteurs fiables
+- Corrige la perte des likes, des réponses et de l'état « J'aime » lorsque la vidéo vient du cache.
+- Migration locale sans effacer les données ni l'historique de lecture.
+- Ne présente plus une donnée inconnue comme un vrai zéro : « — » signifie que les chiffres n'ont pas été reçus de X.
+- Actualise les compteurs stockés lorsque la vidéo est récupérée à nouveau depuis X.

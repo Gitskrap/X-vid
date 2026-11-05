@@ -6,6 +6,7 @@ import '../database/entities.dart';
 import '../database/repository.dart';
 import '../utils/app_logger.dart';
 import '../utils/date_utils.dart';
+import '../utils/engagement_utils.dart';
 import '../../features/settings/settings_provider.dart';
 
 class TweetResponse {
@@ -1387,6 +1388,10 @@ class TwitterClient {
         AppLogger.log('XFLOW: Unavailable date for tweet $tweetId');
       }
 
+      final rawFavoriteCount = readXCount(legacy['favorite_count']);
+      final rawReplyCount = readXCount(legacy['reply_count']);
+      final isLiked = legacy['favorited'];
+
       tweets.add(Tweet(
         id: tweetId,
         text: legacy['full_text'] ?? legacy['text'] ?? '',
@@ -1397,9 +1402,12 @@ class TwitterClient {
         thumbnailUrl: thumbnailUrl,
         isVideo: isVideo,
         createdAt: createdAt,
-        isLiked: legacy['favorited'] ?? false,
-        favoriteCount: legacy['favorite_count'] ?? 0,
-        replyCount: legacy['reply_count'] ?? 0,
+        isLiked: isLiked == true,
+        favoriteCount: rawFavoriteCount ?? 0,
+        replyCount: rawReplyCount ?? 0,
+        favoriteCountKnown: rawFavoriteCount != null,
+        replyCountKnown: rawReplyCount != null,
+        isLikedKnown: isLiked is bool,
       ));
     } catch (e) {
       AppLogger.log('Error in parseTweetResult for $entryId: $e');
