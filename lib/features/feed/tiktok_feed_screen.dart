@@ -12,6 +12,7 @@ import '../../core/client/account_provider.dart';
 import '../../core/navigation/navigation_provider.dart';
 import 'widgets/tweet_text_overlay.dart';
 import '../cast/cast_video_button.dart';
+import '../player/video_ui_provider.dart';
 
 class TiktokFeedScreen extends ConsumerStatefulWidget {
   const TiktokFeedScreen({super.key});
@@ -45,6 +46,7 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
       setState(() {
         _currentIndex = page;
       });
+      ref.read(videoUiHiddenProvider.notifier).show();
       _managePool();
 
       final feedAsync = ref.read(feedNotifierProvider);
@@ -103,12 +105,14 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
   @override
   Widget build(BuildContext context) {
     final account = ref.watch(accountProvider);
+    final videoUiHidden = ref.watch(videoUiHiddenProvider);
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
           Positioned.fill(child: _buildMediaFeed()),
-          Positioned(
+          if (!videoUiHidden)
+            Positioned(
             top: 0,
             left: 0,
             right: 0,
@@ -307,6 +311,7 @@ class TiktokFeedItem extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
     final castedTweetId = ref.watch(activeCastTweetProvider);
+    final videoUiHidden = ref.watch(videoUiHiddenProvider);
 
     return RepaintBoundary(
       child: Stack(
@@ -323,7 +328,8 @@ class TiktokFeedItem extends ConsumerWidget {
             ),
             onPlaybackError: onPlaybackError,
           ),
-          if (settings.showDebugInfo) DiscoveryDebugOverlay(tweet: tweet),
+          if (settings.showDebugInfo && !videoUiHidden)
+            DiscoveryDebugOverlay(tweet: tweet),
         ],
       ),
     );

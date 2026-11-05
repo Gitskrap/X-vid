@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'features/feed/tiktok_feed_screen.dart';
+import 'features/player/video_ui_provider.dart';
 import 'features/security/biometric_gate.dart';
 import 'features/feed/hashtag_feed_screen.dart';
 import 'features/subscriptions/subscription_list_screen.dart';
@@ -89,6 +90,7 @@ class MainScaffold extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final nav = ref.watch(navigationProvider);
+    final videoUiHidden = ref.watch(videoUiHiddenProvider);
     final navNotifier = ref.read(navigationProvider.notifier);
 
     final mainScreens = IndexedStack(
@@ -145,7 +147,9 @@ class MainScaffold extends ConsumerWidget {
       child: Scaffold(
         extendBody: false,
         body: body,
-        bottomNavigationBar: NavigationBar(
+        bottomNavigationBar: videoUiHidden && nav.currentTab == MainTab.media
+            ? null
+            : NavigationBar(
           selectedIndex: nav.currentTab.index,
           onDestinationSelected: (index) {
             navNotifier.setTab(MainTab.values[index]);

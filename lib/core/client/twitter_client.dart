@@ -1354,7 +1354,14 @@ class TwitterClient {
             ..sort((a, b) => (b['bitrate'] ?? 0).compareTo(a['bitrate'] ?? 0));
 
           if (bestVariant.isNotEmpty) {
-            mediaUrls.add(bestVariant.first['url']);
+            // Keep highest quality first for playback on the phone.
+            // Preserve lower-bitrate MP4 variants as Cast fallbacks.
+            for (final variant in bestVariant) {
+              final url = variant['url']?.toString();
+              if (url != null && !mediaUrls.contains(url)) {
+                mediaUrls.add(url);
+              }
+            }
           } else if (variants.first['url'] != null) {
             mediaUrls.add(variants.first['url']);
           }

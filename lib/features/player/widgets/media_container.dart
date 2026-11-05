@@ -13,6 +13,7 @@ import '../../feed/widgets/text_tweet_card.dart';
 import '../player_pool_provider.dart';
 import '../../settings/settings_provider.dart';
 import '../../feed/feed_provider.dart';
+import '../video_ui_provider.dart';
 
 class TiktokMediaContainer extends ConsumerStatefulWidget {
   final Tweet tweet;
@@ -180,6 +181,7 @@ class _TiktokMediaContainerState extends ConsumerState<TiktokMediaContainer> {
     });
 
     final settings = ref.watch(settingsProvider);
+    final videoUiHidden = ref.watch(videoUiHiddenProvider);
     final shouldPlay = widget.isVisible && settings.autoplay;
     if (instance.player.state.playing != shouldPlay) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -381,21 +383,24 @@ class _TiktokMediaContainerState extends ConsumerState<TiktokMediaContainer> {
                           }
                           return Stack(
                             children: [
-                              // A tap on the video opens immersive playback.
-                              // Controls layered above remain individually tappable.
+                              // Tapping the video hides only the UI chrome.
+                              // No fullscreen player route or rotation is triggered.
                               Positioned.fill(
                                 child: Semantics(
                                   button: true,
-                                  label: 'Afficher la vidéo en plein écran',
+                                  label: videoUiHidden
+                                      ? 'Réafficher les informations'
+                                      : 'Masquer les informations',
                                   child: GestureDetector(
                                     behavior: HitTestBehavior.opaque,
                                     onTap: () {
-                                      onFullscreen();
+                                      ref.read(videoUiHiddenProvider.notifier)
+                                          .toggle();
                                     },
                                   ),
                                 ),
                               ),
-                              if (widget.overlayBuilder != null)
+                              if (!videoUiHidden && widget.overlayBuilder != null)
                                 Positioned.fill(
                                   child: widget.overlayBuilder!(
                                     context,
@@ -416,8 +421,9 @@ class _TiktokMediaContainerState extends ConsumerState<TiktokMediaContainer> {
                   ),
                 ),
               ),
-              // Progress Bar at the very bottom
-              Positioned(
+              // The video-only mode also hides the progress indicator.
+              if (!videoUiHidden)
+                Positioned(
                 bottom: 0,
                 left: 0,
                 right: 0,

@@ -52,3 +52,9 @@ Le fichier de clé original (.p12) et son mot de passe doivent être conservés 
 - Les boutons d’interaction au-dessus de la vidéo restent cliquables et ne déclenchent pas le plein écran.
 - Retour avec le bouton quitter le plein écran du lecteur ou la navigation Android ; les commandes de lecture restent accessibles dans le lecteur plein écran.
 - Signature Android permanente identique à la version 0.5.0.
+
+## Version 0.7.0
+- Un appui sur la vidéo masque la fiche auteur/date/texte, les actions, la barre du haut, la navigation inférieure et la barre de progression. Le second appui les restaure, sans lancer un autre mode plein écran ni changer l'orientation.
+- Cast via passerelle HTTP temporaire sur le Wi-Fi local du téléphone, limitée aux MP4 de Twitter (pas de recopie de l'écran, ni transmission des cookies X).
+- Transmission HTTP avec Range/CORS pour faciliter le chargement par la TV ; variantes vidéo de qualité inférieure proposées en cas d'incompatibilité.
+- Le Cast ne peut pas fonctionner si les appareils ne communiquent pas directement sur le Wi-Fi (réseau invité, isolation des clients), si la connexion X est privée, ou si le codec n'est pas pris en charge.
