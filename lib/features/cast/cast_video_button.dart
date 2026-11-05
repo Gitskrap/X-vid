@@ -156,7 +156,6 @@ class CastVideoButton extends ConsumerWidget {
       GoogleCastOptionsAndroid(
         appId: GoogleCastDiscoveryCriteria.kDefaultApplicationId,
         stopCastingOnAppTerminated: false,
-        suspendSessionsWhenBackgrounded: false,
       ),
     );
     try {
