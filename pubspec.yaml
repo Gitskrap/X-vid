@@ -32,6 +32,12 @@ dependencies:
   path: ^1.9.1
   flutter_svg: ^2.3.0
 
+# Temporary compatibility pin: permission_handler_android 14.x requires compileSdk 37,
+# while the upstream Flutter/AGP 9.0 application builds with compileSdk 36.
+# Remove this override after an Android Gradle plugin / SDK upgrade.
+dependency_overrides:
+  permission_handler_android: 13.0.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
