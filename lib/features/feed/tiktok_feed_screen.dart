@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../player/player_pool_provider.dart';
@@ -98,7 +99,16 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
     _poolUpdateScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _poolUpdateScheduled = false;
-      if (mounted) _managePool();
+      if (mounted) {
+        _managePool();
+        final tweets = ref.read(feedNotifierProvider).value?.tweets;
+        if (tweets != null && _currentIndex < tweets.length) {
+          // One throttled detail request for the visible video, not for the
+          // whole feed. Never block rendering or playback.
+          unawaited(ref.read(feedNotifierProvider.notifier)
+              .refreshVisibleEngagement(tweets[_currentIndex].id));
+        }
+      }
     });
   }
 

@@ -83,8 +83,28 @@ class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
           label: widget.tweet.favoriteCountKnown
               ? _formatCount(widget.tweet.favoriteCount)
               : '—',
-          onTap: () {
-            ref.read(feedNotifierProvider.notifier).toggleLike(widget.tweet.id);
+          onTap: () async {
+            if (!widget.tweet.isLikedKnown ||
+                !widget.tweet.favoriteCountKnown) {
+              final updated = await ref
+                  .read(feedNotifierProvider.notifier)
+                  .refreshVisibleEngagement(widget.tweet.id, force: true);
+              if (!updated) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Impossible de vérifier les likes auprès de X. '
+                        'Réessaie après avoir connecté ton compte.',
+                      ),
+                    ),
+                  );
+                }
+                return;
+              }
+            }
+            await ref.read(feedNotifierProvider.notifier)
+                .toggleLike(widget.tweet.id);
           },
         ),
         const SizedBox(height: 16),

@@ -64,3 +64,6 @@ Le fichier de clé original (.p12) et son mot de passe doivent être conservés 
 - Migration locale sans effacer les données ni l'historique de lecture.
 - Ne présente plus une donnée inconnue comme un vrai zéro : « — » signifie que les chiffres n'ont pas été reçus de X.
 - Actualise les compteurs stockés lorsque la vidéo est récupérée à nouveau depuis X.
+
+- Mise à jour automatique limitée des compteurs de la vidéo affichée lorsque le compte X est connecté (une requête détaillée au maximum toutes les 25 secondes et une tentative par vidéo toutes les 15 minutes).
+- Vérification de l'état J'aime avant une action si le cache ne l'a jamais fourni, pour éviter de compter un like inexistant.

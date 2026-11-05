@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/client/twitter_client.dart';
+import '../../core/client/twitter_account.dart';
 import '../../core/models/tweet.dart';
 import '../../core/database/repository.dart';
 import '../../core/client/discovery_engine.dart';
@@ -42,6 +43,87 @@ class FeedState {
 }
 
 class FeedNotifier extends AsyncNotifier<FeedState> {
+  // A bounded number of detailed X requests refreshes visible counters
+  // without rate-limiting every vertical swipe.
+  final Map<String, DateTime> _checkedEngagementAt = {};
+  DateTime? _lastEngagementRequest;
+  bool _engagementRequestPending = false;
+
+  /// A cached count is a snapshot; refresh it when the video is viewed.
+  Future<bool> refreshVisibleEngagement(String tweetId,
+      {bool force = false}) async {
+    if (TwitterAccount.currentAccount == null) return false;
+    if (_engagementRequestPending) return false;
+    final current = state.value;
+    if (current == null ||
+        !current.tweets.any((tweet) => tweet.id == tweetId)) {
+      return false;
+    }
+    final now = DateTime.now();
+    final previouslyChecked = _checkedEngagementAt[tweetId];
+    if (!force &&
+        previouslyChecked != null &&
+        now.difference(previouslyChecked) < const Duration(minutes: 15)) {
+      return false;
+    }
+    if (!force &&
+        _lastEngagementRequest != null &&
+        now.difference(_lastEngagementRequest!) < const Duration(seconds: 25)) {
+      return false;
+    }
+
+    _engagementRequestPending = true;
+    _lastEngagementRequest = now;
+    _checkedEngagementAt[tweetId] = now;
+    try {
+      final response =
+          await ref.read(twitterClientProvider).fetchTweetDetail(tweetId);
+      Tweet? fresh;
+      for (final candidate in response.tweets) {
+        if (candidate.id == tweetId) {
+          fresh = candidate;
+          break;
+        }
+      }
+      if (fresh == null ||
+          (!fresh.favoriteCountKnown &&
+              !fresh.replyCountKnown &&
+              !fresh.isLikedKnown)) {
+        return false;
+      }
+
+      final latest = state.value;
+      if (latest == null) return false;
+      final index = latest.tweets.indexWhere((tweet) => tweet.id == tweetId);
+      if (index < 0) return false;
+      final previous = latest.tweets[index];
+
+      final merged = previous.copyWith(
+        favoriteCount: fresh.favoriteCountKnown
+            ? fresh.favoriteCount
+            : previous.favoriteCount,
+        replyCount: fresh.replyCountKnown
+            ? fresh.replyCount
+            : previous.replyCount,
+        isLiked: fresh.isLikedKnown ? fresh.isLiked : previous.isLiked,
+        favoriteCountKnown:
+            previous.favoriteCountKnown || fresh.favoriteCountKnown,
+        replyCountKnown: previous.replyCountKnown || fresh.replyCountKnown,
+        isLikedKnown: previous.isLikedKnown || fresh.isLikedKnown,
+      );
+      final updated = List<Tweet>.from(latest.tweets);
+      updated[index] = merged;
+      state = AsyncData(latest.copyWith(tweets: updated));
+      await Repository.insertCachedMedia([merged]);
+      return true;
+    } catch (e) {
+      AppLogger.log('XFLOW: Could not refresh engagement for $tweetId: $e');
+      return false;
+    } finally {
+      _engagementRequestPending = false;
+    }
+  }
+
   List<Tweet> _runDiscoveryPipeline(
     List<Tweet> freshPool,
     List<Tweet> localPool,
