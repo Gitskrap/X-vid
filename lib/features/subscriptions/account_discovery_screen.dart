@@ -135,6 +135,10 @@ class _AccountDiscoveryScreenState
               : '@' + handle + ' est déjà dans ta liste.'),
         ),
       );
+      if (added) {
+        // Return to the now-updated subscriptions list automatically.
+        Navigator.of(context).pop();
+      }
     } on FormatException catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -268,7 +272,15 @@ class _AccountDiscoveryScreenState
                               : 'Ajouter à mes abonnements locaux',
                           onPressed: registered || _adding
                               ? null
-                              : () => _addProfile(user),
+                              : () async {
+                                  await _addProfile(user);
+                                  if (!context.mounted) return;
+                                  if (ref.read(subscriptionListProvider)
+                                      .isSubscribed(user.screenName)) {
+                                    // The local list is updated before pop.
+                                    Navigator.of(context).pop();
+                                  }
+                                },
                           icon: Icon(registered
                               ? Icons.check_circle
                               : Icons.person_add_alt_1),

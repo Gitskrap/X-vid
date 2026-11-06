@@ -103,6 +103,8 @@ class SubscriptionListState {
 }
 
 class SubscriptionListNotifier extends Notifier<SubscriptionListState> {
+  int _loadVersion = 0;
+
   @override
   SubscriptionListState build() {
     _load();
@@ -110,6 +112,7 @@ class SubscriptionListNotifier extends Notifier<SubscriptionListState> {
   }
 
   Future<void> _load() async {
+    final version = ++_loadVersion;
     try {
       final subscriptions = await Repository.getSubscriptions();
       Map<String, int> views = {};
@@ -118,7 +121,7 @@ class SubscriptionListNotifier extends Notifier<SubscriptionListState> {
       } catch (error) {
         AppLogger.log('Could not load per-account view counts: $error');
       }
-      if (!ref.mounted) return;
+      if (!ref.mounted || version != _loadVersion) return;
       state = state.copyWith(
         allSubscriptions: subscriptions,
         userViews: views,
@@ -126,7 +129,9 @@ class SubscriptionListNotifier extends Notifier<SubscriptionListState> {
       );
     } catch (error) {
       AppLogger.log('Could not load local subscriptions: $error');
-      if (ref.mounted) state = state.copyWith(isLoading: false);
+      if (ref.mounted && version == _loadVersion) {
+        state = state.copyWith(isLoading: false);
+      }
     }
   }
 
@@ -171,8 +176,16 @@ class SubscriptionListNotifier extends Notifier<SubscriptionListState> {
 
   Future<bool> saveSubscription(Subscription sub) async {
     if (isSubscribed(sub.screenName)) return false;
+    // Persist before acknowledging success, then publish a fresh list
+    // immediately. A background refresh must not replace it with a stale
+    // snapshot. Clear the local search that otherwise hides the new account.
     await Repository.insertSubscription(sub);
-    await refresh();
+    _loadVersion++;
+    state = state.copyWith(
+      allSubscriptions: [...state.allSubscriptions, sub],
+      searchQuery: '',
+      isLoading: false,
+    );
     return true;
   }
 
@@ -201,7 +214,25 @@ class SubscriptionListNotifier extends Notifier<SubscriptionListState> {
         where: 'id = ?',
         whereArgs: [old.id],
       );
-      if (ref.mounted) await refresh();
+      if (ref.mounted) {
+        state = state.copyWith(
+          allSubscriptions: [
+            for (final sub in state.allSubscriptions)
+              if (sub.screenName.toLowerCase() == handle.toLowerCase())
+                Subscription(
+                  id: sub.id,
+                  screenName: sub.screenName,
+                  name: profile.name,
+                  profileImageUrl: profile.profileImageUrl,
+                  description: profile.description,
+                  followersCount: profile.followersCount,
+                  followingCount: profile.followingCount,
+                )
+              else
+                sub,
+          ],
+        );
+      }
     } catch (error) {
       AppLogger.log('Optional public profile enrichment unavailable: $error');
     }
@@ -548,46 +579,88 @@ class SubscriptionListScreen extends ConsumerWidget {
   }
 
   Widget _buildSearchAndSort(BuildContext context, WidgetRef ref) {
-    final notifier = ref.read(subscriptionListProvider.notifier);
-    final state = ref.watch(subscriptionListProvider);
-
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       child: Column(
         children: [
-          SearchBar(
-            hintText: 'Mes abonnements ou recherche publique...',
-            onChanged: notifier.setSearchQuery,
-            onSubmitted: (query) => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => AccountDiscoveryScreen(initialQuery: query),
-              ),
-            ),
-            leading: const Icon(Icons.search),
-            trailing: [
-              IconButton(
-                tooltip: 'Chercher sur X sans connexion',
-                icon: const Icon(Icons.travel_explore),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => AccountDiscoveryScreen(
-                      initialQuery: state.searchQuery,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-            elevation: WidgetStateProperty.all(0),
-            backgroundColor: WidgetStateProperty.all(
-                Theme.of(context).colorScheme.surfaceContainerHigh),
-            padding: WidgetStateProperty.all(
-                const EdgeInsets.symmetric(horizontal: 16)),
-          ),
+          const _SubscriptionsSearchBar(),
           const SizedBox(height: 8),
           const SubscriptionSortSettings(),
         ],
+      ),
+    );
+  }
+}
+
+/// The local search text and Riverpod filter must stay synchronized. Adding
+/// an account clears the filter, even while the discovery route is on top.
+class _SubscriptionsSearchBar extends ConsumerStatefulWidget {
+  const _SubscriptionsSearchBar();
+
+  @override
+  ConsumerState<_SubscriptionsSearchBar> createState() =>
+      _SubscriptionsSearchBarState();
+}
+
+class _SubscriptionsSearchBarState
+    extends ConsumerState<_SubscriptionsSearchBar> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(
+      text: ref.read(subscriptionListProvider).searchQuery,
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _discover(BuildContext context, String query) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AccountDiscoveryScreen(initialQuery: query),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen<String>(
+      subscriptionListProvider.select((state) => state.searchQuery),
+      (previous, next) {
+        if (_controller.text == next) return;
+        _controller.value = TextEditingValue(
+          text: next,
+          selection: TextSelection.collapsed(offset: next.length),
+        );
+      },
+    );
+
+    return SearchBar(
+      controller: _controller,
+      hintText: 'Mes abonnements ou recherche publique...',
+      onChanged: ref.read(subscriptionListProvider.notifier).setSearchQuery,
+      onSubmitted: (query) => _discover(context, query),
+      leading: const Icon(Icons.search),
+      trailing: [
+        IconButton(
+          tooltip: 'Rechercher des comptes publics',
+          icon: const Icon(Icons.travel_explore),
+          onPressed: () => _discover(context, _controller.text),
+        ),
+      ],
+      elevation: WidgetStateProperty.all(0),
+      backgroundColor: WidgetStateProperty.all(
+        Theme.of(context).colorScheme.surfaceContainerHigh,
+      ),
+      padding: WidgetStateProperty.all(
+        const EdgeInsets.symmetric(horizontal: 16),
       ),
     );
   }

@@ -101,3 +101,9 @@ Le fichier de clé original (.p12) et son mot de passe doivent être conservés 
 - Bouton d'ajout manuel disponible même si les résultats de recherche publics échouent ou si le cache local est en chargement.
 - Dans la fiche d'un compte enregistré, récupération des vidéos publiques via `/2/profile/{handle}/media` en absence de compte X, lorsqu'elles sont disponibles ; le cache vidéo reste utilisable hors réseau.
 - Les résultats de ce service tiers peuvent être limités, incomplets ou indisponibles et ne donnent pas accès aux comptes privés.
+
+## 0.15.0 — Abonnements visibles sans revenir à l'accueil
+- Après ajout d'un compte (manuel ou recherche publique), la liste d'abonnements est mise à jour dans le même état Riverpod sans attendre un changement d'onglet.
+- Le filtre de recherche local est réinitialisé et son champ synchronisé afin de ne plus cacher les nouveaux comptes.
+- Le bouton Ajouter depuis la recherche revient directement à la liste mise à jour ; les recherches réseau facultatives ne bloquent pas l'ajout local.
+- Test de non-régression : nouvel abonnement visible même lorsqu'un filtre précédent excluait son nom.
