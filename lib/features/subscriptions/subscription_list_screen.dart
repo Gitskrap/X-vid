@@ -549,6 +549,7 @@ class SubscriptionListScreen extends ConsumerWidget {
 
   Widget _buildSearchAndSort(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(subscriptionListProvider.notifier);
+    final state = ref.watch(subscriptionListProvider);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
