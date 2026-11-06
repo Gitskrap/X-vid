@@ -67,3 +67,9 @@ Le fichier de clé original (.p12) et son mot de passe doivent être conservés 
 
 - Mise à jour automatique limitée des compteurs de la vidéo affichée lorsque le compte X est connecté (une requête détaillée au maximum toutes les 25 secondes et une tentative par vidéo toutes les 15 minutes).
 - Vérification de l'état J'aime avant une action si le cache ne l'a jamais fourni, pour éviter de compter un like inexistant.
+
+## Version 0.9.0 — Qualité du Cast
+- Le sélecteur Cast propose **Auto** (défaut), **Haute qualité** et **Économie de données** ; le choix est mémorisé sur le téléphone.
+- Auto tente d'abord le MP4 au débit le plus élevé, puis les variantes inférieures seulement en cas d'échec confirmé.
+- Haute qualité tente uniquement la meilleure variante, sans baisse de qualité silencieuse. Économie utilise la plus petite variante.
+- Le relais Wi-Fi ne réencode pas la vidéo. La qualité dépend des fichiers fournis par X et des capacités du téléviseur.

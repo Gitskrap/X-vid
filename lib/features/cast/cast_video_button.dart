@@ -6,6 +6,7 @@ import 'package:flutter_chrome_cast/flutter_chrome_cast.dart';
 
 import '../../core/models/tweet.dart';
 import 'local_video_proxy.dart';
+import 'cast_quality.dart';
 
 /// The remote receiver fetches only MP4 bytes via an ephemeral LAN proxy.
 /// It receives no tweet text, cookies, account data or mirrored phone screen.
@@ -52,7 +53,11 @@ class ActiveCastTweetNotifier extends Notifier<String?> {
     });
   }
 
-  Future<void> play(Tweet tweet, GoogleCastDevice device) async {
+  Future<void> play(
+    Tweet tweet,
+    GoogleCastDevice device, {
+    CastQualityMode quality = CastQualityMode.auto,
+  }) async {
     if (!tweet.isVideo || tweet.mediaUrls.isEmpty) {
       throw StateError('Cette publication ne comporte pas de vidéo.');
     }
@@ -67,9 +72,9 @@ class ActiveCastTweetNotifier extends Notifier<String?> {
     if (urls.isEmpty) {
       throw StateError('Aucun flux MP4 Twitter utilisable pour cette vidéo.');
     }
-    // The Twitter parser stores high bitrate first for the phone.
-    // Cast tries small, broadly compatible variants first.
-    final candidates = urls.reversed.take(3).toList();
+    // X returns MP4 files highest bitrate first. Auto attempts the
+    // best variant, only trying lower quality if playback fails.
+    final candidates = selectCastCandidates(urls, quality);
     Object? lastError;
     for (final candidate in candidates) {
       try {
@@ -80,7 +85,8 @@ class ActiveCastTweetNotifier extends Notifier<String?> {
       }
     }
     throw StateError(
-      'Aucune des qualités vidéo essayées n’a démarré sur la TV. '
+      'Lecture impossible en mode ${quality.label} '
+      '(${candidates.length} qualité(s) testée(s)). '
       'Dernière erreur : $lastError',
     );
   }
@@ -274,7 +280,13 @@ class CastVideoButton extends ConsumerWidget {
                 if (diagnostic) {
                   await ref.read(activeCastTweetProvider.notifier).playTest(device);
                 } else {
-                  await ref.read(activeCastTweetProvider.notifier).play(tweet, device);
+                  final quality =
+                      await ref.read(castQualityModeProvider.future);
+                  await ref.read(activeCastTweetProvider.notifier).play(
+                    tweet,
+                    device,
+                    quality: quality,
+                  );
                 }
                 if (!sheetContext.mounted) return;
                 setSheetState(() {
@@ -333,6 +345,66 @@ class CastVideoButton extends ConsumerWidget {
                         ),
                       ),
                     ],
+                    const SizedBox(height: 14),
+                    Consumer(
+                      builder: (context, qualityRef, _) {
+                        final qualityAsync =
+                            qualityRef.watch(castQualityModeProvider);
+                        final selected =
+                            qualityAsync.value ?? CastQualityMode.auto;
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Qualité du Cast',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            DropdownButtonFormField<CastQualityMode>(
+                              key: ValueKey(selected),
+                              initialValue: selected,
+                              isExpanded: true,
+                              decoration: InputDecoration(
+                                prefixIcon:
+                                    const Icon(Icons.high_quality_rounded),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                isDense: true,
+                              ),
+                              items: CastQualityMode.values.map((mode) {
+                                return DropdownMenuItem(
+                                  value: mode,
+                                  child: Text(mode.label),
+                                );
+                              }).toList(),
+                              onChanged: busy || qualityAsync.isLoading
+                                  ? null
+                                  : (mode) {
+                                      if (mode != null) {
+                                        unawaited(
+                                          qualityRef
+                                              .read(castQualityModeProvider.notifier)
+                                              .select(mode),
+                                        );
+                                      }
+                                    },
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              selected.description,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFFB5BEC3),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
                     const SizedBox(height: 14),
                     StreamBuilder<List<GoogleCastDevice>>(
                       stream: GoogleCastDiscoveryManager.instance.devicesStream,

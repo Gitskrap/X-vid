@@ -1,7 +1,7 @@
 name: xflow
 description: Video-only Android client for X, based on XFlow.
 publish_to: 'none'
-version: 0.8.0+8
+version: 0.9.0+9
 
 environment:
   sdk: '>=3.12.0 <4.0.0'
