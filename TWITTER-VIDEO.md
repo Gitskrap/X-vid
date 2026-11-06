@@ -94,3 +94,10 @@ Le fichier de clé original (.p12) et son mot de passe doivent être conservés 
 - Ajouter un compte public par @identifiant ou URL, sans se connecter à X, dans une liste conservée sur l'appareil. Retirer un compte reste local, sans modifier les abonnements X.
 - Les fiches de comptes enregistrés restent accessibles avec leur identifiant lorsque X bloque le profil ; les vidéos disponibles en cache restent visibles.
 - Limite clairement affichée : enregistrer un compte n'autorise pas à consulter ses nouvelles vidéos si X refuse l'accès anonyme.
+
+## 0.14.0 — Recherche et comptes sans connexion X
+- La barre Abonnements continue de filtrer les comptes locaux, mais une loupe dédiée et la validation clavier ouvrent maintenant une **recherche globale** de comptes publics.
+- Source publique indépendante FxEmbed : suggestions par nom et @identifiant via `/2/typeahead` et profils via `/2/profile/{handle}` (aucune donnée de connexion X transmise).
+- Bouton d'ajout manuel disponible même si les résultats de recherche publics échouent ou si le cache local est en chargement.
+- Dans la fiche d'un compte enregistré, récupération des vidéos publiques via `/2/profile/{handle}/media` en absence de compte X, lorsqu'elles sont disponibles ; le cache vidéo reste utilisable hors réseau.
+- Les résultats de ce service tiers peuvent être limités, incomplets ou indisponibles et ne donnent pas accès aux comptes privés.

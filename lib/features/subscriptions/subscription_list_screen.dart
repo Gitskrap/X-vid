@@ -9,6 +9,9 @@ import '../profile/user_details_screen.dart';
 import '../../core/navigation/navigation_provider.dart';
 import '../settings/settings_screen.dart';
 import 'subscription_handle.dart';
+import 'account_discovery_screen.dart';
+import '../../core/client/public_x_client.dart';
+import 'dart:async';
 
 enum SubscriptionSort {
   name,
@@ -107,16 +110,24 @@ class SubscriptionListNotifier extends Notifier<SubscriptionListState> {
   }
 
   Future<void> _load() async {
-    final results = await Future.wait([
-      Repository.getSubscriptions(),
-      Repository.getPlayedCountsByUser(),
-    ]);
-
-    state = state.copyWith(
-      allSubscriptions: results[0] as List<Subscription>,
-      userViews: results[1] as Map<String, int>,
-      isLoading: false,
-    );
+    try {
+      final subscriptions = await Repository.getSubscriptions();
+      Map<String, int> views = {};
+      try {
+        views = await Repository.getPlayedCountsByUser();
+      } catch (error) {
+        AppLogger.log('Could not load per-account view counts: $error');
+      }
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        allSubscriptions: subscriptions,
+        userViews: views,
+        isLoading: false,
+      );
+    } catch (error) {
+      AppLogger.log('Could not load local subscriptions: $error');
+      if (ref.mounted) state = state.copyWith(isLoading: false);
+    }
   }
 
   void setSearchQuery(String query) {
@@ -146,16 +157,54 @@ class SubscriptionListNotifier extends Notifier<SubscriptionListState> {
         'ou un lien de profil x.com.',
       );
     }
-    if (isSubscribed(handle)) return false;
-    await Repository.insertSubscription(
-      Subscription(
-        id: 'local_' + handle.toLowerCase(),
-        screenName: handle,
-        name: handle,
-      ),
-    );
+    final result = await saveSubscription(Subscription(
+      id: 'local_' + handle.toLowerCase(),
+      screenName: handle,
+      name: handle,
+    ));
+    if (result) {
+      // Local save completes first, even if the public API is unreachable.
+      unawaited(_enrichSavedHandle(handle));
+    }
+    return result;
+  }
+
+  Future<bool> saveSubscription(Subscription sub) async {
+    if (isSubscribed(sub.screenName)) return false;
+    await Repository.insertSubscription(sub);
     await refresh();
     return true;
+  }
+
+  Future<void> _enrichSavedHandle(String handle) async {
+    try {
+      final profile = await PublicXClient().profile(handle);
+      if (profile == null || !ref.mounted ||
+          !isSubscribed(handle)) return;
+      // The same screen name may have been removed while the request ran.
+      final database = await Repository.database;
+      final existing = await database.query(tableSubscriptions,
+        where: 'LOWER(screen_name) = ?',
+        whereArgs: [handle.toLowerCase()],
+        limit: 1,
+      );
+      if (existing.isEmpty) return;
+      final old = Subscription.fromMap(existing.first);
+      await database.update(tableSubscriptions,
+        {
+          'name': profile.name,
+          'profile_image_url': profile.profileImageUrl,
+          'description': profile.description,
+          'followers_count': profile.followersCount,
+          'following_count': profile.followingCount,
+        },
+        where: 'id = ?',
+        whereArgs: [old.id],
+      );
+      if (ref.mounted) await refresh();
+    } catch (error) {
+      AppLogger.log('Optional public profile enrichment unavailable: $error');
+    }
   }
 
   Future<void> toggleSubscription(Subscription sub) async {
@@ -311,13 +360,13 @@ class SubscriptionListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(subscriptionListProvider);
-    if (state.isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
     final subs = state.filteredSubscriptions;
 
-    Widget content = subs.isEmpty
+    // Keep the app bar and Add/Search actions available even if the local
+    // database is still loading or its optional view counts failed.
+    Widget content = state.isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : subs.isEmpty
         ? Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -333,14 +382,25 @@ class SubscriptionListScreen extends ConsumerWidget {
                       .bodyMedium
                       ?.copyWith(color: Colors.white70),
                 ),
-                if (state.searchQuery.isEmpty) ...[
-                  const SizedBox(height: 16),
-                  FilledButton.icon(
-                    onPressed: () => _addAccount(context, ref),
-                    icon: const Icon(Icons.person_add_alt_1),
-                    label: const Text('Ajouter un compte'),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AccountDiscoveryScreen(
+                        initialQuery: state.searchQuery,
+                      ),
+                    ),
                   ),
-                ],
+                  icon: const Icon(Icons.travel_explore),
+                  label: const Text('Rechercher des comptes publics'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () => _addAccount(context, ref),
+                  icon: const Icon(Icons.person_add_alt_1),
+                  label: const Text('Ajouter un @identifiant'),
+                ),
               ],
             ),
           )
@@ -444,6 +504,18 @@ class SubscriptionListScreen extends ConsumerWidget {
         title: const Text('Abonnements'),
         actions: [
           IconButton(
+            tooltip: 'Rechercher des comptes publics sans connexion X',
+            icon: const Icon(Icons.search_rounded),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => AccountDiscoveryScreen(
+                  initialQuery: state.searchQuery,
+                ),
+              ),
+            ),
+          ),
+          IconButton(
             tooltip: 'Ajouter un compte sans connexion',
             icon: const Icon(Icons.person_add_alt_1),
             onPressed: () => _addAccount(context, ref),
@@ -483,9 +555,29 @@ class SubscriptionListScreen extends ConsumerWidget {
       child: Column(
         children: [
           SearchBar(
-            hintText: 'Chercher dans mes comptes...',
+            hintText: 'Mes abonnements ou recherche publique...',
             onChanged: notifier.setSearchQuery,
+            onSubmitted: (query) => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => AccountDiscoveryScreen(initialQuery: query),
+              ),
+            ),
             leading: const Icon(Icons.search),
+            trailing: [
+              IconButton(
+                tooltip: 'Chercher sur X sans connexion',
+                icon: const Icon(Icons.travel_explore),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AccountDiscoveryScreen(
+                      initialQuery: state.searchQuery,
+                    ),
+                  ),
+                ),
+              ),
+            ],
             elevation: WidgetStateProperty.all(0),
             backgroundColor: WidgetStateProperty.all(
                 Theme.of(context).colorScheme.surfaceContainerHigh),

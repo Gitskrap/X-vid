@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/client/twitter_client.dart';
 import '../../core/client/twitter_account.dart';
 import '../../core/client/account_provider.dart';
+import '../../core/client/public_x_client.dart';
 import '../../core/database/repository.dart';
 import '../../core/database/entities.dart';
 import '../feed/feed_provider.dart'; // For FeedState
@@ -26,12 +27,19 @@ final userProfileProvider =
     }
   }
   final local = await Repository.getSubscriptions();
+  Subscription? saved;
   for (final sub in local) {
     if (sub.screenName.toLowerCase() == handle.toLowerCase()) {
-      return sub;
+      saved = sub;
+      break;
     }
   }
-  return null;
+  if (account == null &&
+      (saved == null || saved.profileImageUrl == null)) {
+    final publicProfile = await PublicXClient().profile(handle);
+    if (publicProfile != null) return publicProfile;
+  }
+  return saved;
 });
 
 class UserMediaNotifier extends AsyncNotifier<FeedState> {
@@ -49,21 +57,17 @@ class UserMediaNotifier extends AsyncNotifier<FeedState> {
     final cached =
         await Repository.getUserCachedMedia(screenName, settings.loadBatchSize);
 
-    final authenticated = account != null;
-    // With no X session, browsing local cached videos does not send
-    // doomed HTTP 403 requests. The handle and profile are still available.
-    if (authenticated) {
-      unawaited(_fetchFreshData(screenName, client, settings));
-    }
+    // Use the public read-only media source when logged out. A provider
+    // outage cannot erase already cached videos.
+    unawaited(_fetchFreshData(screenName, client, settings));
 
     return FeedState(
       tweets: cached.map((t) => t.copyWith(source: 'Cache')).toList(),
-      isRefreshing: authenticated,
+      isRefreshing: true,
     );
   }
 
   Future<void> refresh() async {
-    if (TwitterAccount.currentAccount == null) return;
     final screenName = arg.startsWith('@') ? arg.substring(1) : arg;
     final currentState = state.value;
     if (currentState != null) {
@@ -177,6 +181,9 @@ class UserMediaNotifier extends AsyncNotifier<FeedState> {
     String? cursor,
     required int cooldownMinutes,
   }) async {
+    if (TwitterAccount.currentAccount == null) {
+      return PublicXClient().userVideos(screenName, cursor: cursor);
+    }
     Subscription? profile;
     try {
       profile = await client.fetchProfile(screenName);

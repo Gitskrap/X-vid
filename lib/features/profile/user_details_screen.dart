@@ -169,9 +169,9 @@ class UserDetailsScreen extends ConsumerWidget {
                           padding: const EdgeInsets.all(32.0),
                           child: Text(
                              ref.watch(accountProvider) == null
-                                 ? 'Aucune vidéo enregistrée sur cet appareil. '
-                                   'X bloque parfois le chargement de nouvelles '
-                                   'vidéos lorsque tu es déconnecté.'
+                                 ? 'Aucune vidéo disponible depuis la source '
+                                   'publique pour ce compte. Réessaie plus '
+                                   'tard ou utilise les vidéos en cache.'
                                  : 'Aucune vidéo trouvée.',
                              textAlign: TextAlign.center,
                            ),
