@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/client/twitter_account.dart';
+import '../../core/client/account_provider.dart';
+import '../auth/login_screen.dart';
 import '../../core/database/repository.dart';
 import '../../core/models/tweet.dart';
 import '../../core/navigation/navigation_provider.dart';
@@ -65,6 +67,24 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
         });
         _focus.requestFocus();
       }
+      return;
+    }
+
+    if (!more && ref.read(accountProvider) == null) {
+      // X denies its native search to logged-out visitors (HTTP 403).
+      // Don't send a futile request or pretend that no videos exist.
+      _focus.unfocus();
+      ref.read(videoUiHiddenProvider.notifier).show();
+      setState(() {
+        _query = text;
+        _results = [];
+        _cursor = null;
+        _hasMore = false;
+        _index = 0;
+        _isLoading = false;
+        _loadingMore = false;
+        _error = null;
+      });
       return;
     }
 
@@ -241,6 +261,18 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
     );
   }
 
+  Future<void> _connectToX() async {
+    final connected = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+    );
+    if (!mounted || connected != true) return;
+    if (_query.isNotEmpty) {
+      unawaited(_runSearch());
+    } else {
+      setState(() => _error = null);
+    }
+  }
+
   void _setSort(FeedSort sort) {
     if (sort == _sort) return;
     setState(() => _sort = sort);
@@ -250,6 +282,7 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
   @override
   Widget build(BuildContext context) {
     final hideUi = ref.watch(videoUiHiddenProvider);
+    final account = ref.watch(accountProvider);
     final hasVideos = _results.isNotEmpty;
 
     return Scaffold(
@@ -297,12 +330,30 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
                           ),
                           const SizedBox(height: 12),
                           const Text(
-                            'Des vidéos de tous les comptes publics sur X, '
-                            'même sans les suivre.',
+                            'Rechercher les vidéos de comptes publics, '
+                            'même sans être abonné à ces comptes.',
                             textAlign: TextAlign.center,
                             style: TextStyle(color: Colors.white70),
                           ),
-                          if (_query.isNotEmpty && _error == null) ...[
+                          if (account == null) ...[
+                            const SizedBox(height: 16),
+                            const Text(
+                              'X bloque la recherche lorsque tu es déconnecté '
+                              '(HTTP 403). La lecture des vidéos déjà disponibles '
+                              'reste possible, mais la recherche par mots-clés '
+                              'sur X nécessite une connexion.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.orangeAccent),
+                            ),
+                            const SizedBox(height: 14),
+                            FilledButton.icon(
+                              onPressed: _connectToX,
+                              icon: const Icon(Icons.login_rounded),
+                              label: const Text('Se connecter à X'),
+                            ),
+                          ],
+                          if (account != null && _query.isNotEmpty &&
+                              _error == null) ...[
                             const SizedBox(height: 12),
                             Text(
                               'Aucune vidéo renvoyée par X pour « ' + _query + ' ». '

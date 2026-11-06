@@ -84,3 +84,8 @@ Le fichier de clé original (.p12) et son mot de passe doivent être conservés 
 - Cast : boutons Volume +/− du téléphone agissent sur la TV connectée ; réglette de secours dans la fenêtre Cast.
 - Recherche : identifiants X mis à jour, méthodes GET/POST, erreurs X visibles, décodage de toutes les instructions de timeline au lieu de la première.
 - Lecteur : bouton « Full » retiré ; bascule en paysage avec l'option rotation automatique Android active, en gardant le lecteur et masquant les barres superflues.
+
+## Version 0.12.0 — Recherche X sans session
+- La recherche native de X nécessite une session connectée : X répond HTTP 403 sinon. Cette restriction est explicitement signalée avant une recherche, au lieu d'afficher une erreur laissant croire à une panne ou une absence de vidéos.
+- Bouton « Se connecter à X » depuis la recherche : l'utilisateur revient à sa requête après authentification.
+- La consultation de vidéos locales disponibles sans compte continue de fonctionner ; aucun mécanisme non vérifié de recherche anonyme n'est présenté comme fonctionnel.
