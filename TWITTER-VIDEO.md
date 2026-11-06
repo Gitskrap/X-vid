@@ -79,3 +79,8 @@ Le fichier de clé original (.p12) et son mot de passe doivent être conservés 
 - Résultats MP4 uniquement, en lecture verticale avec réactions, commentaires et Cast.
 - Onglets de tri Récentes et Populaires (Top X), pagination et déduplication.
 - Recherche basée sur l'interface X existante : connexion éventuellement nécessaire, accès non officiel susceptible de changer.
+
+## 0.11.0 — Recherche X, volume Cast, paysage
+- Cast : boutons Volume +/− du téléphone agissent sur la TV connectée ; réglette de secours dans la fenêtre Cast.
+- Recherche : identifiants X mis à jour, méthodes GET/POST, erreurs X visibles, décodage de toutes les instructions de timeline au lieu de la première.
+- Lecteur : bouton « Full » retiré ; bascule en paysage avec l'option rotation automatique Android active, en gardant le lecteur et masquant les barres superflues.

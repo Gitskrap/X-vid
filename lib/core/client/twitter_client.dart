@@ -1249,24 +1249,23 @@ class TwitterClient {
         timeline['timeline']?['instructions'] ??
         []);
 
-    // Find entries from any instruction that contains them (AddEntries or ReplaceEntry)
-    Map<String, dynamic>? entriesInstruction;
+    // SearchTimeline can use multiple instructions (pin, add, replace and
+    // pagination). Only parsing the first instruction loses videos.
+    final entries = <dynamic>[];
     for (final instruction in instructions) {
-      if (instruction is Map<String, dynamic> &&
-          (instruction['entries'] != null || instruction['entry'] != null)) {
-        entriesInstruction = instruction;
-        break;
+      if (instruction is! Map) continue;
+      final batch = instruction['entries'];
+      if (batch is List) {
+        entries.addAll(batch);
+      } else if (instruction['entry'] != null) {
+        entries.add(instruction['entry']);
       }
     }
-
-    if (entriesInstruction == null) {
-      AppLogger.log(
-          'No entries found in instructions. Available types: ${instructions.map((e) => e['type'] ?? e['__typename'])}');
+    if (entries.isEmpty) {
+      AppLogger.log('No timeline entries. Instructions: ' +
+          instructions.toString());
       return TweetResponse(tweets: []);
     }
-
-    final entries = List.from(entriesInstruction['entries'] ??
-        [entriesInstruction['entry']].where((e) => e != null));
 
     String? cursorTop;
     String? cursorBottom;

@@ -99,6 +99,7 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
         cursor: more ? cursor : null,
         count: 30,
         timeoutSeconds: 20,
+        reportErrors: true,
       );
       if (!mounted || _searchVersion != requestVersion) return;
 
@@ -301,10 +302,10 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
                             textAlign: TextAlign.center,
                             style: TextStyle(color: Colors.white70),
                           ),
-                          if (_query.isNotEmpty) ...[
+                          if (_query.isNotEmpty && _error == null) ...[
                             const SizedBox(height: 12),
                             Text(
-                              'Aucune vidéo trouvée pour « ' + _query + ' ». '
+                              'Aucune vidéo renvoyée par X pour « ' + _query + ' ». '
                               'Essaie d’autres mots-clés.',
                               textAlign: TextAlign.center,
                             ),
