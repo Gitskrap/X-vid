@@ -8,7 +8,6 @@ import '../../core/utils/app_logger.dart';
 import '../profile/user_details_screen.dart';
 import '../../core/navigation/navigation_provider.dart';
 import '../settings/settings_screen.dart';
-import '../../core/client/account_provider.dart';
 import 'subscription_handle.dart';
 
 enum SubscriptionSort {
@@ -478,7 +477,6 @@ class SubscriptionListScreen extends ConsumerWidget {
 
   Widget _buildSearchAndSort(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(subscriptionListProvider.notifier);
-    final state = ref.watch(subscriptionListProvider);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),

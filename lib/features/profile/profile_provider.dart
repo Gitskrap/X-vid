@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/client/twitter_client.dart';
 import '../../core/client/twitter_account.dart';
+import '../../core/client/account_provider.dart';
 import '../../core/database/repository.dart';
 import '../../core/database/entities.dart';
 import '../feed/feed_provider.dart'; // For FeedState
@@ -10,12 +11,13 @@ import '../settings/settings_provider.dart';
 
 final userProfileProvider =
     FutureProvider.family<Subscription?, String>((ref, screenName) async {
+  final account = ref.watch(accountProvider);
   final handle = screenName.startsWith('@')
       ? screenName.substring(1)
       : screenName;
   // Use local bookmark metadata when logged out or remote access is denied.
   // The saved list works independently of an X login.
-  if (TwitterAccount.currentAccount != null) {
+  if (account != null) {
     try {
       final profile = await ref.watch(twitterClientProvider).fetchProfile(handle);
       if (profile != null) return profile;
@@ -40,13 +42,14 @@ class UserMediaNotifier extends AsyncNotifier<FeedState> {
   FutureOr<FeedState> build() async {
     final client = ref.watch(twitterClientProvider);
     final settings = ref.watch(settingsProvider);
+    final account = ref.watch(accountProvider);
     final screenName = arg.startsWith('@') ? arg.substring(1) : arg;
 
     // 1. Try to load from cache immediately to show SOMETHING
     final cached =
         await Repository.getUserCachedMedia(screenName, settings.loadBatchSize);
 
-    final authenticated = TwitterAccount.currentAccount != null;
+    final authenticated = account != null;
     // With no X session, browsing local cached videos does not send
     // doomed HTTP 403 requests. The handle and profile are still available.
     if (authenticated) {

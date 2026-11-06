@@ -163,10 +163,10 @@ class UserDetailsScreen extends ConsumerWidget {
                   final isRefreshing = state.isRefreshing;
 
                   if (tweets.isEmpty && !isRefreshing) {
-                    return const SliverToBoxAdapter(
+                    return SliverToBoxAdapter(
                       child: Center(
                         child: Padding(
-                          padding: EdgeInsets.all(32.0),
+                          padding: const EdgeInsets.all(32.0),
                           child: Text(
                              ref.watch(accountProvider) == null
                                  ? 'Aucune vidéo enregistrée sur cet appareil. '
