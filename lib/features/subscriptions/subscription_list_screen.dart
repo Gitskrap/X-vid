@@ -9,7 +9,7 @@ import '../profile/user_details_screen.dart';
 import '../../core/navigation/navigation_provider.dart';
 import '../settings/settings_screen.dart';
 import '../../core/client/account_provider.dart';
-import '../auth/login_screen.dart';
+import 'subscription_handle.dart';
 
 enum SubscriptionSort {
   name,
@@ -137,6 +137,28 @@ class SubscriptionListNotifier extends Notifier<SubscriptionListState> {
     await _load();
   }
 
+  /// Save the public handle locally, without any X credentials or network
+  /// request. This does not follow the account on X itself.
+  Future<bool> addHandle(String value) async {
+    final handle = normalizeSubscriptionHandle(value);
+    if (handle == null) {
+      throw const FormatException(
+        'Indique un @identifiant (1 à 15 caractères) '
+        'ou un lien de profil x.com.',
+      );
+    }
+    if (isSubscribed(handle)) return false;
+    await Repository.insertSubscription(
+      Subscription(
+        id: 'local_' + handle.toLowerCase(),
+        screenName: handle,
+        name: handle,
+      ),
+    );
+    await refresh();
+    return true;
+  }
+
   Future<void> toggleSubscription(Subscription sub) async {
     final exists = isSubscribed(sub.screenName);
 
@@ -185,11 +207,111 @@ class SubscriptionListScreen extends ConsumerWidget {
 
   const SubscriptionListScreen({super.key, this.isStandalone = true});
 
+  Future<void> _addAccount(BuildContext context, WidgetRef ref) async {
+    final text = TextEditingController();
+    String? errorMessage;
+    bool submitting = false;
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, updateDialog) {
+            Future<void> save() async {
+              if (submitting) return;
+              updateDialog(() {
+                submitting = true;
+                errorMessage = null;
+              });
+              try {
+                final added = await ref.read(subscriptionListProvider.notifier)
+                    .addHandle(text.text);
+                if (!dialogContext.mounted) return;
+                if (!added) {
+                  updateDialog(() {
+                    submitting = false;
+                    errorMessage = 'Ce compte est déjà dans ta liste.';
+                  });
+                  return;
+                }
+                Navigator.pop(dialogContext);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Compte enregistré localement.')),
+                  );
+                }
+              } on FormatException catch (error) {
+                if (dialogContext.mounted) {
+                  updateDialog(() {
+                    submitting = false;
+                    errorMessage = error.message;
+                  });
+                }
+              } catch (_) {
+                if (dialogContext.mounted) {
+                  updateDialog(() {
+                    submitting = false;
+                    errorMessage = 'Enregistrement impossible.';
+                  });
+                }
+              }
+            }
+
+            return AlertDialog(
+              title: const Text('Ajouter un compte X'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Enregistre un compte public sans te connecter à X.'),
+                  const SizedBox(height: 12),
+                  TextField(
+                    autofocus: true,
+                    controller: text,
+                    textInputAction: TextInputAction.done,
+                    decoration: const InputDecoration(
+                      labelText: 'Identifiant ou lien X',
+                      hintText: '@NASA',
+                      border: OutlineInputBorder(),
+                    ),
+                    onSubmitted: (_) => save(),
+                  ),
+                  if (errorMessage != null) ...[
+                    const SizedBox(height: 10),
+                    Text(errorMessage!,
+                        style: const TextStyle(color: Colors.orangeAccent)),
+                  ],
+                  const SizedBox(height: 10),
+                  const Text(
+                    'La liste fonctionne hors connexion X. '
+                    'L’accès aux nouvelles vidéos dépend toujours de X.',
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: submitting
+                      ? null
+                      : () => Navigator.pop(dialogContext),
+                  child: const Text('Annuler'),
+                ),
+                FilledButton(
+                  onPressed: submitting ? null : save,
+                  child: const Text('Ajouter'),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    } finally {
+      text.dispose();
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(subscriptionListProvider);
-    final account = ref.watch(accountProvider);
-
     if (state.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -203,19 +325,21 @@ class SubscriptionListScreen extends ConsumerWidget {
               children: [
                 Text(
                   state.searchQuery.isEmpty
-                      ? 'No subscriptions found.'
-                      : 'No results matching "${state.searchQuery}"',
+                      ? 'Aucun compte enregistré. Ajoute un @compte sans '
+                        'connecter ton compte X.'
+                      : 'Aucun compte correspondant à la recherche.',
+                  textAlign: TextAlign.center,
                   style: Theme.of(context)
                       .textTheme
                       .bodyMedium
                       ?.copyWith(color: Colors.white70),
                 ),
-                if (account == null) ...[
+                if (state.searchQuery.isEmpty) ...[
                   const SizedBox(height: 16),
-                  FilledButton.tonal(
-                    onPressed: () => Navigator.push(context,
-                        MaterialPageRoute(builder: (c) => const LoginScreen())),
-                    child: const Text('Login to X'),
+                  FilledButton.icon(
+                    onPressed: () => _addAccount(context, ref),
+                    icon: const Icon(Icons.person_add_alt_1),
+                    label: const Text('Ajouter un compte'),
                   ),
                 ],
               ],
@@ -258,6 +382,37 @@ class SubscriptionListScreen extends ConsumerWidget {
                     style: TextStyle(
                         color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
+                  trailing: IconButton(
+                    tooltip: 'Retirer de ma liste',
+                    icon: const Icon(Icons.remove_circle_outline),
+                    onPressed: () async {
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (dialogContext) => AlertDialog(
+                          title: const Text('Retirer le compte ?'),
+                          content: Text(
+                            'Retirer @' + sub.screenName +
+                            ' de ta liste locale ? Cela ne change '
+                            'rien à ton compte X.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(dialogContext, false),
+                              child: const Text('Annuler'),
+                            ),
+                            FilledButton(
+                              onPressed: () => Navigator.pop(dialogContext, true),
+                              child: const Text('Retirer'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirmed == true) {
+                        await ref.read(subscriptionListProvider.notifier)
+                            .toggleSubscription(sub);
+                      }
+                    },
+                  ),
                   onTap: () {
                     if (isStandalone) {
                       Navigator.push(
@@ -287,8 +442,13 @@ class SubscriptionListScreen extends ConsumerWidget {
                 onPressed: () =>
                     ref.read(subscriptionListProvider.notifier).refresh(),
               ),
-        title: const Text('Subscriptions'),
+        title: const Text('Abonnements'),
         actions: [
+          IconButton(
+            tooltip: 'Ajouter un compte sans connexion',
+            icon: const Icon(Icons.person_add_alt_1),
+            onPressed: () => _addAccount(context, ref),
+          ),
           if (!isStandalone)
             IconButton(
               icon: const Icon(Icons.settings_outlined),
@@ -325,7 +485,7 @@ class SubscriptionListScreen extends ConsumerWidget {
       child: Column(
         children: [
           SearchBar(
-            hintText: 'Search subscriptions...',
+            hintText: 'Chercher dans mes comptes...',
             onChanged: notifier.setSearchQuery,
             leading: const Icon(Icons.search),
             elevation: WidgetStateProperty.all(0),
@@ -355,25 +515,25 @@ class SubscriptionSortSettings extends ConsumerWidget {
       child: Row(
         children: [
           _SortChip(
-            label: 'Name',
+            label: 'Nom',
             isSelected: state.sort == SubscriptionSort.name,
             onTap: () => notifier.setSort(SubscriptionSort.name),
           ),
           const SizedBox(width: 8),
           _SortChip(
-            label: 'Handle',
+            label: 'Identifiant',
             isSelected: state.sort == SubscriptionSort.handle,
             onTap: () => notifier.setSort(SubscriptionSort.handle),
           ),
           const SizedBox(width: 8),
           _SortChip(
-            label: 'Followers',
+            label: 'Abonnés',
             isSelected: state.sort == SubscriptionSort.followers,
             onTap: () => notifier.setSort(SubscriptionSort.followers),
           ),
           const SizedBox(width: 8),
           _SortChip(
-            label: 'Views',
+            label: 'Vues',
             isSelected: state.sort == SubscriptionSort.views,
             onTap: () => notifier.setSort(SubscriptionSort.views),
           ),

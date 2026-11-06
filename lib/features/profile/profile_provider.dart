@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/client/twitter_client.dart';
+import '../../core/client/twitter_account.dart';
 import '../../core/database/repository.dart';
 import '../../core/database/entities.dart';
 import '../feed/feed_provider.dart'; // For FeedState
@@ -9,8 +10,26 @@ import '../settings/settings_provider.dart';
 
 final userProfileProvider =
     FutureProvider.family<Subscription?, String>((ref, screenName) async {
-  final client = ref.watch(twitterClientProvider);
-  return client.fetchProfile(screenName);
+  final handle = screenName.startsWith('@')
+      ? screenName.substring(1)
+      : screenName;
+  // Use local bookmark metadata when logged out or remote access is denied.
+  // The saved list works independently of an X login.
+  if (TwitterAccount.currentAccount != null) {
+    try {
+      final profile = await ref.watch(twitterClientProvider).fetchProfile(handle);
+      if (profile != null) return profile;
+    } catch (error) {
+      debugPrint('Profile lookup unavailable: $error');
+    }
+  }
+  final local = await Repository.getSubscriptions();
+  for (final sub in local) {
+    if (sub.screenName.toLowerCase() == handle.toLowerCase()) {
+      return sub;
+    }
+  }
+  return null;
 });
 
 class UserMediaNotifier extends AsyncNotifier<FeedState> {
@@ -27,16 +46,21 @@ class UserMediaNotifier extends AsyncNotifier<FeedState> {
     final cached =
         await Repository.getUserCachedMedia(screenName, settings.loadBatchSize);
 
-    // Trigger async fetch in the background
-    _fetchFreshData(screenName, client, settings);
+    final authenticated = TwitterAccount.currentAccount != null;
+    // With no X session, browsing local cached videos does not send
+    // doomed HTTP 403 requests. The handle and profile are still available.
+    if (authenticated) {
+      unawaited(_fetchFreshData(screenName, client, settings));
+    }
 
     return FeedState(
       tweets: cached.map((t) => t.copyWith(source: 'Cache')).toList(),
-      isRefreshing: true, // Mark as refreshing while we fetch
+      isRefreshing: authenticated,
     );
   }
 
   Future<void> refresh() async {
+    if (TwitterAccount.currentAccount == null) return;
     final screenName = arg.startsWith('@') ? arg.substring(1) : arg;
     final currentState = state.value;
     if (currentState != null) {

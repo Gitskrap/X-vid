@@ -89,3 +89,8 @@ Le fichier de clé original (.p12) et son mot de passe doivent être conservés 
 - La recherche native de X nécessite une session connectée : X répond HTTP 403 sinon. Cette restriction est explicitement signalée avant une recherche, au lieu d'afficher une erreur laissant croire à une panne ou une absence de vidéos.
 - Bouton « Se connecter à X » depuis la recherche : l'utilisateur revient à sa requête après authentification.
 - La consultation de vidéos locales disponibles sans compte continue de fonctionner ; aucun mécanisme non vérifié de recherche anonyme n'est présenté comme fonctionnel.
+
+## 0.13.0 — Abonnements locaux sans identifiants X
+- Ajouter un compte public par @identifiant ou URL, sans se connecter à X, dans une liste conservée sur l'appareil. Retirer un compte reste local, sans modifier les abonnements X.
+- Les fiches de comptes enregistrés restent accessibles avec leur identifiant lorsque X bloque le profil ; les vidéos disponibles en cache restent visibles.
+- Limite clairement affichée : enregistrer un compte n'autorise pas à consulter ses nouvelles vidéos si X refuse l'accès anonyme.

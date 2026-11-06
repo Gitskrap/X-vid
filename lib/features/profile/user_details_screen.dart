@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/navigation/navigation_provider.dart';
+import '../../core/client/account_provider.dart';
 import '../../core/utils/media_cache_manager.dart';
 import '../settings/settings_provider.dart';
 import '../settings/settings_screen.dart';
@@ -166,7 +167,14 @@ class UserDetailsScreen extends ConsumerWidget {
                       child: Center(
                         child: Padding(
                           padding: EdgeInsets.all(32.0),
-                          child: Text('No media found'),
+                          child: Text(
+                             ref.watch(accountProvider) == null
+                                 ? 'Aucune vidéo enregistrée sur cet appareil. '
+                                   'X bloque parfois le chargement de nouvelles '
+                                   'vidéos lorsque tu es déconnecté.'
+                                 : 'Aucune vidéo trouvée.',
+                             textAlign: TextAlign.center,
+                           ),
                         ),
                       ),
                     );
