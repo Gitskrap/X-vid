@@ -412,10 +412,12 @@ class _TiktokMediaContainerState extends ConsumerState<TiktokMediaContainer> {
                           );
                         },
                         onExitFullscreen: () async {
-                          await SystemChrome.setPreferredOrientations([
-                            DeviceOrientation.portraitUp,
-                          ]);
-                        },
+                           await SystemChrome.setPreferredOrientations([
+                             DeviceOrientation.portraitUp,
+                             DeviceOrientation.landscapeLeft,
+                             DeviceOrientation.landscapeRight,
+                           ]);
+                         },
                       ),
                     ),
                   ),

@@ -117,12 +117,13 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
   Widget build(BuildContext context) {
     final account = ref.watch(accountProvider);
     final videoUiHidden = ref.watch(videoUiHiddenProvider);
+    final landscape = MediaQuery.orientationOf(context) == Orientation.landscape;
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
           Positioned.fill(child: _buildMediaFeed()),
-          if (!videoUiHidden)
+          if (!videoUiHidden && !landscape)
             Positioned(
             top: 0,
             left: 0,

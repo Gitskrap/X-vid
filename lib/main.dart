@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:flutter/services.dart';
 import 'features/feed/tiktok_feed_screen.dart';
 import 'features/search/video_search_screen.dart';
 import 'features/player/video_ui_provider.dart';
@@ -21,6 +22,12 @@ import 'core/utils/lifecycle_provider.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
+  // Honor device orientation: portrait or either landscape direction.
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
 
   await Future.wait([
     TwitterAccount.init(),
@@ -92,6 +99,7 @@ class MainScaffold extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final nav = ref.watch(navigationProvider);
     final videoUiHidden = ref.watch(videoUiHiddenProvider);
+    final landscape = MediaQuery.orientationOf(context) == Orientation.landscape;
     final navNotifier = ref.read(navigationProvider.notifier);
 
     final mainScreens = IndexedStack(
@@ -151,6 +159,7 @@ class MainScaffold extends ConsumerWidget {
         extendBody: false,
         body: body,
         bottomNavigationBar: nav.isVideoSearchOpen ||
+                (landscape && nav.currentTab == MainTab.media) ||
                 (videoUiHidden && nav.currentTab == MainTab.media)
             ? null
             : NavigationBar(

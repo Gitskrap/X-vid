@@ -128,15 +128,7 @@ class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
         ),
         const SizedBox(height: 16),
         CastVideoButton(tweet: widget.tweet),
-        if (widget.onFullscreen != null && widget.tweet.isVideo) ...[
-          const SizedBox(height: 16),
-          _ActionButton(
-            icon:
-                widget.isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
-            label: widget.isFullscreen ? "Exit" : "Full",
-            onTap: widget.onFullscreen!,
-          ),
-        ],
+
       ],
     );
   }
