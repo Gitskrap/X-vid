@@ -7,6 +7,7 @@ import 'package:flutter_chrome_cast/flutter_chrome_cast.dart';
 import '../../core/models/tweet.dart';
 import 'local_video_proxy.dart';
 import 'cast_quality.dart';
+import 'cast_volume_control.dart';
 
 /// The remote receiver fetches only MP4 bytes via an ephemeral LAN proxy.
 /// It receives no tweet text, cookies, account data or mirrored phone screen.
@@ -403,6 +404,14 @@ class CastVideoButton extends ConsumerWidget {
                             ),
                           ],
                         );
+                      },
+                    ),
+                    Consumer(
+                      builder: (context, innerRef, _) {
+                        final active = innerRef.watch(activeCastTweetProvider);
+                        return active == null
+                            ? const SizedBox.shrink()
+                            : const CastVolumeControl();
                       },
                     ),
                     const SizedBox(height: 14),
