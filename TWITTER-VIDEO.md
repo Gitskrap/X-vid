@@ -73,3 +73,9 @@ Le fichier de clé original (.p12) et son mot de passe doivent être conservés 
 - Auto tente d'abord le MP4 au débit le plus élevé, puis les variantes inférieures seulement en cas d'échec confirmé.
 - Haute qualité tente uniquement la meilleure variante, sans baisse de qualité silencieuse. Économie utilise la plus petite variante.
 - Le relais Wi-Fi ne réencode pas la vidéo. La qualité dépend des fichiers fournis par X et des capacités du téléviseur.
+
+## Version 0.10.0 — Recherche de vidéos
+- Loupe dans le fil pour rechercher des vidéos X par mots-clés ou hashtags, sans être abonné aux comptes.
+- Résultats MP4 uniquement, en lecture verticale avec réactions, commentaires et Cast.
+- Onglets de tri Récentes et Populaires (Top X), pagination et déduplication.
+- Recherche basée sur l'interface X existante : connexion éventuellement nécessaire, accès non officiel susceptible de changer.

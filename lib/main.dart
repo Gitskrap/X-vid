@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'features/feed/tiktok_feed_screen.dart';
+import 'features/search/video_search_screen.dart';
 import 'features/player/video_ui_provider.dart';
 import 'features/security/biometric_gate.dart';
 import 'features/feed/hashtag_feed_screen.dart';
@@ -103,7 +104,9 @@ class MainScaffold extends ConsumerWidget {
     );
 
     Widget? overlayScreen;
-    if (nav.selectedHashtag != null) {
+    if (nav.isVideoSearchOpen) {
+      overlayScreen = const VideoSearchScreen();
+    } else if (nav.selectedHashtag != null) {
       overlayScreen = HashtagMediaFeedScreen(hashtag: nav.selectedHashtag!);
     } else if (nav.selectedUser != null) {
       if (nav.userMediaInitialIndex != null) {
@@ -138,7 +141,7 @@ class MainScaffold extends ConsumerWidget {
     );
 
     return PopScope(
-      canPop: nav.selectedUser == null && nav.selectedHashtag == null,
+      canPop: !nav.isVideoSearchOpen && nav.selectedUser == null && nav.selectedHashtag == null,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop) {
           navNotifier.back();
@@ -147,7 +150,8 @@ class MainScaffold extends ConsumerWidget {
       child: Scaffold(
         extendBody: false,
         body: body,
-        bottomNavigationBar: videoUiHidden && nav.currentTab == MainTab.media
+        bottomNavigationBar: nav.isVideoSearchOpen ||
+                (videoUiHidden && nav.currentTab == MainTab.media)
             ? null
             : NavigationBar(
           selectedIndex: nav.currentTab.index,

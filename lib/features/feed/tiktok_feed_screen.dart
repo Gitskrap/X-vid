@@ -100,6 +100,7 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _poolUpdateScheduled = false;
       if (mounted) {
+        if (ref.read(navigationProvider).isVideoSearchOpen) return;
         _managePool();
         final tweets = ref.read(feedNotifierProvider).value?.tweets;
         if (tweets != null && _currentIndex < tweets.length) {
@@ -149,6 +150,11 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
                       ),
                     ),
                     const Spacer(),
+                    IconButton(
+                      tooltip: 'Rechercher des vidéos',
+                      onPressed: () => ref.read(navigationProvider.notifier).openVideoSearch(),
+                      icon: const Icon(Icons.search_rounded),
+                    ),
                     if (account == null)
                       IconButton.filledTonal(
                         tooltip: 'Connexion X',
@@ -184,7 +190,8 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
   Widget _buildMediaFeed() {
     final feedAsync = ref.watch(feedNotifierProvider);
     final nav = ref.watch(navigationProvider);
-    final isScreenActive = nav.selectedUser == null &&
+    final isScreenActive = !nav.isVideoSearchOpen &&
+        nav.selectedUser == null &&
         nav.selectedHashtag == null &&
         nav.currentTab == MainTab.media;
 
@@ -308,6 +315,7 @@ class TiktokFeedItem extends ConsumerWidget {
   final bool isVisible;
   final bool autoFullscreen;
   final VoidCallback? onPlaybackError;
+  final Future<void> Function(String tweetId)? onLike;
 
   const TiktokFeedItem({
     super.key,
@@ -315,6 +323,7 @@ class TiktokFeedItem extends ConsumerWidget {
     required this.isVisible,
     this.autoFullscreen = false,
     this.onPlaybackError,
+    this.onLike,
   });
 
   @override
@@ -335,6 +344,7 @@ class TiktokFeedItem extends ConsumerWidget {
               tweet: tweet,
               onFullscreen: onFullscreen,
               isFullscreen: isFullscreen,
+              onLike: onLike,
             ),
             onPlaybackError: onPlaybackError,
           ),

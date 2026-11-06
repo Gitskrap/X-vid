@@ -8,6 +8,7 @@ class NavigationState {
   final int? userMediaInitialIndex;
   final String? userMediaInitialTweetId;
   final String? selectedHashtag;
+  final bool isVideoSearchOpen;
 
   NavigationState({
     this.currentTab = MainTab.media,
@@ -15,6 +16,7 @@ class NavigationState {
     this.userMediaInitialIndex,
     this.userMediaInitialTweetId,
     this.selectedHashtag,
+    this.isVideoSearchOpen = false,
   });
 
   NavigationState copyWith({
@@ -26,6 +28,7 @@ class NavigationState {
     bool clearUser = false,
     bool clearMediaIndex = false,
     bool clearHashtag = false,
+    bool? isVideoSearchOpen,
   }) {
     return NavigationState(
       currentTab: currentTab ?? this.currentTab,
@@ -39,6 +42,7 @@ class NavigationState {
       selectedHashtag: (clearHashtag || clearUser)
           ? null
           : (selectedHashtag ?? this.selectedHashtag),
+      isVideoSearchOpen: isVideoSearchOpen ?? this.isVideoSearchOpen,
     );
   }
 }
@@ -49,12 +53,12 @@ class NavigationNotifier extends Notifier<NavigationState> {
 
   void setTab(MainTab tab) {
     state =
-        state.copyWith(currentTab: tab, clearUser: true, clearHashtag: true);
+        state.copyWith(currentTab: tab, clearUser: true, clearHashtag: true, isVideoSearchOpen: false);
   }
 
   void selectUser(String screenName) {
     state = state.copyWith(
-        selectedUser: screenName, clearMediaIndex: true, clearHashtag: true);
+        selectedUser: screenName, clearMediaIndex: true, clearHashtag: true, isVideoSearchOpen: false);
   }
 
   void openUserMedia(String screenName, int index, {String? tweetId}) {
@@ -62,15 +66,21 @@ class NavigationNotifier extends Notifier<NavigationState> {
         selectedUser: screenName,
         userMediaInitialIndex: index,
         userMediaInitialTweetId: tweetId,
-        clearHashtag: true);
+        clearHashtag: true, isVideoSearchOpen: false);
   }
 
   void selectHashtag(String hashtag) {
-    state = state.copyWith(selectedHashtag: hashtag);
+    state = state.copyWith(selectedHashtag: hashtag, isVideoSearchOpen: false);
+  }
+
+  void openVideoSearch() {
+    state = state.copyWith(clearUser: true, clearHashtag: true, isVideoSearchOpen: true);
   }
 
   void back() {
-    if (state.selectedHashtag != null) {
+    if (state.isVideoSearchOpen) {
+      state = state.copyWith(isVideoSearchOpen: false);
+    } else if (state.selectedHashtag != null) {
       state = state.copyWith(clearHashtag: true);
     } else if (state.userMediaInitialIndex != null) {
       state = state.copyWith(clearMediaIndex: true);

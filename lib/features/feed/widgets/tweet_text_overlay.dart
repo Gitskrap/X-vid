@@ -15,12 +15,14 @@ class TweetTextOverlay extends ConsumerStatefulWidget {
   final Tweet tweet;
   final VoidCallback? onFullscreen;
   final bool isFullscreen;
+  final Future<void> Function(String tweetId)? onLike;
 
   const TweetTextOverlay({
     super.key,
     required this.tweet,
     this.onFullscreen,
     this.isFullscreen = false,
+    this.onLike,
   });
 
   @override
@@ -84,6 +86,10 @@ class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
               ? _formatCount(widget.tweet.favoriteCount)
               : '—',
           onTap: () async {
+            if (widget.onLike != null) {
+              await widget.onLike!(widget.tweet.id);
+              return;
+            }
             if (!widget.tweet.isLikedKnown ||
                 !widget.tweet.favoriteCountKnown) {
               final updated = await ref
