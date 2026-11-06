@@ -163,6 +163,7 @@ class _FakeTwitterClient extends TwitterClient {
     int cooldownMinutes = 15,
     int? minFaves,
     int timeoutSeconds = 15,
+    bool reportErrors = false,
   }) async {
     return _responses[(query: query, sort: sort, cursor: cursor)] ??
         (throw StateError(

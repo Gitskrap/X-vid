@@ -51,6 +51,11 @@ android {
     }
 }
 
+// The application calls the native CastSession volume APIs directly.
+dependencies {
+    implementation("com.google.android.gms:play-services-cast-framework:22.3.1")
+}
+
 kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
