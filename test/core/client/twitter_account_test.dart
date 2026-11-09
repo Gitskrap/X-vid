@@ -1,7 +1,29 @@
+import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:xflow/core/database/entities.dart';
 import 'package:xflow/core/client/twitter_account.dart';
 
 void main() {
+
+  test('session authentication requires X auth and CSRF cookies', () {
+    Account account(String header) => Account(
+      id: 'account',
+      screenName: 'example',
+      restId: '123',
+      authHeader: header,
+    );
+    expect(TwitterAccount.hasAuthSession(null), false);
+    expect(TwitterAccount.hasAuthSession(account('invalid-json')), false);
+    expect(TwitterAccount.hasAuthSession(account(jsonEncode({
+      'Cookie': 'ct0=csrf;',
+      'x-csrf-token': 'csrf',
+    }))), false);
+    expect(TwitterAccount.hasAuthSession(account(jsonEncode({
+      'Cookie': 'guest_id=123;auth_token=secret;ct0=csrf',
+      'x-csrf-token': 'csrf',
+    }))), true);
+  });
+
   test('compactForLog flattens whitespace and truncates long values', () {
     final compact = TwitterAccount.compactForLog(
       '  line one\n   line two\tline three  ',

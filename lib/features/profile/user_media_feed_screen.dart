@@ -175,7 +175,7 @@ class _UserMediaFeedScreenState extends ConsumerState<UserMediaFeedScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('No media found.',
+                  const Text('Aucune vidéo trouvée pour ce compte.',
                       style: TextStyle(color: Colors.white70)),
                   const SizedBox(height: 16),
                   ElevatedButton(

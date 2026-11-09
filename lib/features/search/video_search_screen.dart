@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/client/twitter_account.dart';
 import '../../core/client/account_provider.dart';
+import '../../core/client/twitter_client.dart';
+import '../../core/client/public_x_client.dart';
 import '../auth/login_screen.dart';
 import '../../core/database/repository.dart';
 import '../../core/models/tweet.dart';
@@ -40,6 +42,7 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
   bool _isLoading = false;
   bool _loadingMore = false;
   bool _hasMore = false;
+  bool _usingPublicSearch = false;
   bool _poolScheduled = false;
   final Set<String> _likePending = {};
 
@@ -70,24 +73,6 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
       return;
     }
 
-    if (!more && ref.read(accountProvider) == null) {
-      // X denies its native search to logged-out visitors (HTTP 403).
-      // Don't send a futile request or pretend that no videos exist.
-      _focus.unfocus();
-      ref.read(videoUiHiddenProvider.notifier).show();
-      setState(() {
-        _query = text;
-        _results = [];
-        _cursor = null;
-        _hasMore = false;
-        _index = 0;
-        _isLoading = false;
-        _loadingMore = false;
-        _error = null;
-      });
-      return;
-    }
-
     if (more) {
       setState(() => _loadingMore = true);
     } else {
@@ -100,6 +85,7 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
         _results = [];
         _cursor = null;
         _hasMore = false;
+        _usingPublicSearch = false;
         _index = 0;
         _isLoading = true;
         _error = null;
@@ -110,17 +96,42 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
     final cursor = _cursor;
 
     try {
-      // No from: or following: constraint: search across public X posts.
-      // Video filter is enforced both by X and by our local MP4 filter.
-      final response = await ref.read(twitterClientProvider).fetchTrendingMedia(
-        query: text,
-        sort: _sort,
-        filters: const {MediaFilter.video},
+      // Prefer the signed-in X timeline when available. If it fails or
+      // returns no videos, fall back to public FxEmbed without X credentials.
+      // Keep the same provider for subsequent cursor pages.
+      bool usePublic = more
+          ? _usingPublicSearch
+          : !TwitterAccount.hasAuthSession(ref.read(accountProvider));
+      late TweetResponse response;
+      Future<TweetResponse> publicSearch() => PublicXClient().searchVideos(
+        text,
         cursor: more ? cursor : null,
         count: 30,
-        timeoutSeconds: 20,
-        reportErrors: true,
+        top: _sort == FeedSort.trending || _sort == FeedSort.popular,
       );
+      if (usePublic) {
+        response = await publicSearch();
+      } else {
+        try {
+          response = await ref.read(twitterClientProvider).fetchTrendingMedia(
+            query: text,
+            sort: _sort,
+            filters: const {MediaFilter.video},
+            cursor: more ? cursor : null,
+            count: 30,
+            timeoutSeconds: 20,
+            reportErrors: true,
+          );
+          if (!more && videoSearchResults(response.tweets).isEmpty) {
+            usePublic = true;
+            response = await publicSearch();
+          }
+        } catch (error) {
+          debugPrint('X authenticated search failed, trying public: $error');
+          usePublic = true;
+          response = await publicSearch();
+        }
+      }
       if (!mounted || _searchVersion != requestVersion) return;
 
       final videos = videoSearchResults(response.tweets);
@@ -128,6 +139,7 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
       final additional = videos.where((tweet) => !knownIds.contains(tweet.id));
       setState(() {
         _results = more ? [..._results, ...additional] : videos;
+        _usingPublicSearch = usePublic;
         _cursor = response.cursorBottom;
         _hasMore = response.tweets.isNotEmpty &&
             response.cursorBottom != null &&
@@ -283,6 +295,7 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
   Widget build(BuildContext context) {
     final hideUi = ref.watch(videoUiHiddenProvider);
     final account = ref.watch(accountProvider);
+    final signedIn = TwitterAccount.hasAuthSession(account);
     final hasVideos = _results.isNotEmpty;
 
     return Scaffold(
@@ -335,13 +348,11 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
                             textAlign: TextAlign.center,
                             style: TextStyle(color: Colors.white70),
                           ),
-                          if (account == null) ...[
+                          if (!signedIn) ...[
                             const SizedBox(height: 16),
                             const Text(
-                              'X bloque la recherche lorsque tu es déconnecté '
-                              '(HTTP 403). La lecture des vidéos déjà disponibles '
-                              'reste possible, mais la recherche par mots-clés '
-                              'sur X nécessite une connexion.',
+                              'Recherche publique disponible sans connexion. '
+                              'Connecte-toi pour tenter aussi la recherche X.',
                               textAlign: TextAlign.center,
                               style: TextStyle(color: Colors.orangeAccent),
                             ),
@@ -352,11 +363,10 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
                               label: const Text('Se connecter à X'),
                             ),
                           ],
-                          if (account != null && _query.isNotEmpty &&
-                              _error == null) ...[
+                          if (_query.isNotEmpty && _error == null) ...[
                             const SizedBox(height: 12),
                             Text(
-                              'Aucune vidéo renvoyée par X pour « ' + _query + ' ». '
+                              'Aucune vidéo trouvée pour « ' + _query + ' ». '
                               'Essaie d’autres mots-clés.',
                               textAlign: TextAlign.center,
                             ),

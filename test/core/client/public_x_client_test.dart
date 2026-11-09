@@ -1,7 +1,32 @@
+import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:xflow/core/client/public_x_client.dart';
 
 void main() {
+
+  test('public keyword video search sends no authentication headers', () async {
+    final client = PublicXClient(client: MockClient((request) async {
+      expect(request.url.host, 'api.fxtwitter.com');
+      expect(request.url.path, '/2/search');
+      expect(request.url.queryParameters['q'], 'paris filter:videos');
+      expect(request.url.queryParameters['feed'], 'top');
+      expect(request.url.queryParameters['cursor'], 'previous');
+      expect(request.headers.containsKey('Cookie'), false);
+      expect(request.headers.containsKey('authorization'), false);
+      return http.Response(jsonEncode({
+        'code': 200,
+        'results': [],
+        'cursor': {'bottom': 'next'},
+      }), 200);
+    }));
+    final response = await client.searchVideos(
+      'paris', top: true, cursor: 'previous');
+    expect(response.tweets, isEmpty);
+    expect(response.cursorBottom, 'next');
+  });
+
   test('public account discovery decodes real user fields', () {
     final users = PublicXClient.decodeSuggestions({
       'code': 200,

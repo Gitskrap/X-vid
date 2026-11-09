@@ -44,12 +44,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 return;
               }
               screenName = screenName.replaceAll('"', '');
-              _userFound = true;
-
               final cookies =
                   await _cookieManager.getCookies(LoginScreen.homeUrl);
-              final ct0Cookie = cookies.firstWhere((c) => c.name == 'ct0',
-                  orElse: () => throw Exception('ct0 not found'));
+              final hasAuthToken = cookies.any(
+                  (c) => c.name == 'auth_token' && c.value.isNotEmpty);
+              final csrfCookies = cookies.where(
+                  (c) => c.name == 'ct0' && c.value.isNotEmpty);
+              if (!hasAuthToken || csrfCookies.isEmpty) {
+                // Reaching /home alone is not proof of an authenticated session.
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text(
+                      'Connexion X incomplète : cookies de session absents.',
+                    )),
+                  );
+                }
+                return;
+              }
+              final ct0Cookie = csrfCookies.first;
+              _userFound = true;
 
               final authHeader = {
                 "Cookie": cookies
@@ -96,7 +109,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               );
 
               await Repository.insertAccount(account);
-              ref.read(accountProvider.notifier).login(account);
+              await ref.read(accountProvider.notifier).login(account);
 
               if (mounted) {
                 Navigator.pop(context, true);

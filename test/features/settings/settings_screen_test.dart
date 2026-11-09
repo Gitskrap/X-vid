@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:xflow/features/settings/settings_screen.dart';
+import 'package:xflow/core/client/account_provider.dart';
+import 'package:xflow/core/database/entities.dart';
 import 'package:xflow/features/settings/settings_provider.dart';
 
 void main() {
@@ -10,6 +12,22 @@ void main() {
   databaseFactory = databaseFactoryFfi;
 
   group('SettingsScreen Widget Tests', () {
+
+    testWidgets('logged-out settings offer login but no logout',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          settingsProvider.overrideWith(() => MockSettingsNotifier()),
+          savedAccountsProvider.overrideWith((ref) async => <Account>[]),
+        ],
+        child: const MaterialApp(home: SettingsScreen()),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('Aucun compte connecté'), findsOneWidget);
+      expect(find.text('Se connecter à X'), findsOneWidget);
+      expect(find.byIcon(Icons.logout), findsNothing);
+    });
+
     testWidgets('renders all settings options', (WidgetTester tester) async {
       await tester.runAsync(() async {
         await tester.pumpWidget(
