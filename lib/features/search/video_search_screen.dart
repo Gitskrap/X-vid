@@ -70,8 +70,9 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
       return;
     }
 
-    if (!more && ref.read(accountProvider) == null) {
-      // X denies its native search to logged-out visitors (HTTP 403).
+    if (!more &&
+        !TwitterAccount.hasAuthSession(ref.read(accountProvider))) {
+      // X denies its native search to visitors without a valid cookie set.
       // Don't send a futile request or pretend that no videos exist.
       _focus.unfocus();
       ref.read(videoUiHiddenProvider.notifier).show();
@@ -283,6 +284,7 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
   Widget build(BuildContext context) {
     final hideUi = ref.watch(videoUiHiddenProvider);
     final account = ref.watch(accountProvider);
+    final signedIn = TwitterAccount.hasAuthSession(account);
     final hasVideos = _results.isNotEmpty;
 
     return Scaffold(
@@ -335,13 +337,12 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
                             textAlign: TextAlign.center,
                             style: TextStyle(color: Colors.white70),
                           ),
-                          if (account == null) ...[
+                          if (!signedIn) ...[
                             const SizedBox(height: 16),
                             const Text(
-                              'X bloque la recherche lorsque tu es déconnecté '
-                              '(HTTP 403). La lecture des vidéos déjà disponibles '
-                              'reste possible, mais la recherche par mots-clés '
-                              'sur X nécessite une connexion.',
+                              'Pour rechercher sur X, connecte-toi avec une '
+                              'session valide. Un compte simplement enregistré '
+                              'ou une session expirée ne suffit pas.',
                               textAlign: TextAlign.center,
                               style: TextStyle(color: Colors.orangeAccent),
                             ),
@@ -352,7 +353,7 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
                               label: const Text('Se connecter à X'),
                             ),
                           ],
-                          if (account != null && _query.isNotEmpty &&
+                          if (signedIn && _query.isNotEmpty &&
                               _error == null) ...[
                             const SizedBox(height: 12),
                             Text(
