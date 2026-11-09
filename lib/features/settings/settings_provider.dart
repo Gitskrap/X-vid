@@ -38,6 +38,7 @@ class SettingsState {
   final FeedSort fetchStrategy;
   final int initialSyncCount;
   final bool strictSubscriptionsOnly;
+  final bool suggestSimilarVideos;
   final bool includeNativeRetweets;
   final bool useChunkedSubscriptions;
   final bool showDebugInfo;
@@ -84,6 +85,7 @@ class SettingsState {
     this.fetchStrategy = FeedSort.algorithmic,
     this.initialSyncCount = 10,
     this.strictSubscriptionsOnly = true,
+    this.suggestSimilarVideos = true,
     this.includeNativeRetweets = false,
     this.useChunkedSubscriptions = true,
     this.showDebugInfo = false,
@@ -125,6 +127,7 @@ class SettingsState {
     FeedSort? fetchStrategy,
     int? initialSyncCount,
     bool? strictSubscriptionsOnly,
+    bool? suggestSimilarVideos,
     bool? includeNativeRetweets,
     bool? useChunkedSubscriptions,
     bool? showDebugInfo,
@@ -168,6 +171,7 @@ class SettingsState {
       initialSyncCount: initialSyncCount ?? this.initialSyncCount,
       strictSubscriptionsOnly:
           strictSubscriptionsOnly ?? this.strictSubscriptionsOnly,
+      suggestSimilarVideos: suggestSimilarVideos ?? this.suggestSimilarVideos,
       includeNativeRetweets:
           includeNativeRetweets ?? this.includeNativeRetweets,
       useChunkedSubscriptions:
@@ -233,6 +237,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
     final initialSyncCount = _prefs.getInt('initialSyncCount') ?? 10;
     final strictSubscriptionsOnly =
         _prefs.getBool('strictSubscriptionsOnly') ?? true;
+    final suggestSimilarVideos = _prefs.getBool('suggestSimilarVideos') ?? true;
     final includeNativeRetweets =
         _prefs.getBool('includeNativeRetweets') ?? false;
     final useChunkedSubscriptions =
@@ -282,6 +287,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
           : FeedSort.algorithmic,
       initialSyncCount: initialSyncCount,
       strictSubscriptionsOnly: strictSubscriptionsOnly,
+      suggestSimilarVideos: suggestSimilarVideos,
       includeNativeRetweets: includeNativeRetweets,
       useChunkedSubscriptions: useChunkedSubscriptions,
       showDebugInfo: showDebugInfo,
@@ -350,6 +356,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
     FeedSort? fetchStrategy,
     int? initialSyncCount,
     bool? strictSubscriptionsOnly,
+    bool? suggestSimilarVideos,
     bool? includeNativeRetweets,
     bool? useChunkedSubscriptions,
     int? saturationWindow,
@@ -378,6 +385,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
       fetchStrategy: fetchStrategy,
       initialSyncCount: initialSyncCount,
       strictSubscriptionsOnly: strictSubscriptionsOnly,
+      suggestSimilarVideos: suggestSimilarVideos,
       includeNativeRetweets: includeNativeRetweets,
       useChunkedSubscriptions: useChunkedSubscriptions,
       saturationWindow: saturationWindow,
@@ -420,6 +428,9 @@ class SettingsNotifier extends Notifier<SettingsState> {
     }
     if (strictSubscriptionsOnly != null) {
       _prefs.setBool('strictSubscriptionsOnly', strictSubscriptionsOnly);
+    }
+    if (suggestSimilarVideos != null) {
+      _prefs.setBool('suggestSimilarVideos', suggestSimilarVideos);
     }
     if (includeNativeRetweets != null) {
       _prefs.setBool('includeNativeRetweets', includeNativeRetweets);
