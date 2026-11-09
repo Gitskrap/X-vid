@@ -240,8 +240,12 @@ class CastVideoButton extends ConsumerWidget {
     }
   }
 
-  Future<void> _openCastPicker(BuildContext context, WidgetRef ref) async {
+  Future<void> _openCastPicker(BuildContext context) async {
     if (!tweet.isVideo || tweet.mediaUrls.isEmpty) return;
+    // The originating video widget may be unmounted while Cast connects.
+    // Capture the app-scoped provider container before any await; never
+    // access the disposed widget's WidgetRef from the bottom sheet.
+    final providers = ProviderScope.containerOf(context, listen: false);
     try {
       await _ensureInitialized();
     } catch (error) {
@@ -279,11 +283,11 @@ class CastVideoButton extends ConsumerWidget {
               });
               try {
                 if (diagnostic) {
-                  await ref.read(activeCastTweetProvider.notifier).playTest(device);
+                  await providers.read(activeCastTweetProvider.notifier).playTest(device);
                 } else {
                   final quality =
-                      await ref.read(castQualityModeProvider.future);
-                  await ref.read(activeCastTweetProvider.notifier).play(
+                      await providers.read(castQualityModeProvider.future);
+                  await providers.read(activeCastTweetProvider.notifier).play(
                     tweet,
                     device,
                     quality: quality,
@@ -494,7 +498,7 @@ class CastVideoButton extends ConsumerWidget {
     final isCastingThis = ref.watch(activeCastTweetProvider) == tweet.id;
     return InkWell(
       borderRadius: BorderRadius.circular(24),
-      onTap: () => _openCastPicker(context, ref),
+      onTap: () => _openCastPicker(context),
       child: SizedBox(
         width: 60,
         child: Column(
