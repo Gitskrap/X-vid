@@ -334,10 +334,21 @@ class PlaybackSettingsPage extends ConsumerWidget {
         children: [
           const ListTile(
             leading: Icon(Icons.people_outline),
-            title: Text('Vidéos : abonnements locaux uniquement'),
-            subtitle: Text('Les comptes enregistrés dans Twitter vidéo '
-                'définissent le fil. Aucun ajout automatique depuis X.'),
-            trailing: Icon(Icons.lock_outline),
+            title: Text('Abonnements Twitter vidéo'),
+            subtitle: Text('Ton fil part des comptes enregistrés dans '
+                'l’application, indépendamment des abonnements X.'),
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.auto_awesome_outlined),
+            title: const Text('Vidéos similaires'),
+            subtitle: const Text('Proposer aussi des vidéos d’autres '
+                'comptes sur des thèmes proches de tes abonnements. '
+                'En désactivant, seules les vidéos de tes abonnements '
+                'locaux seront proposées.'),
+            value: settings.suggestSimilarVideos,
+            onChanged: (enabled) => notifier.updateDiscoveryParam(
+              suggestSimilarVideos: enabled,
+            ),
           ),
           SwitchListTile(
             title: const Text('Autoplay'),
