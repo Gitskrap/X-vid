@@ -1463,6 +1463,9 @@ class TwitterClient {
         id: tweetId,
         text: legacy['full_text'] ?? legacy['text'] ?? '',
         userHandle: '@$screenName',
+        retrievedVia: TwitterAccount.currentAccount == null
+            ? null
+            : '@${TwitterAccount.currentAccount!.screenName}',
         userAvatarUrl: userAvatarUrl,
         mediaKey: mediaKey,
         mediaUrls: mediaUrls,
