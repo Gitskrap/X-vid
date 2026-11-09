@@ -11,6 +11,9 @@ class Tweet {
   final bool isVideo;
   final DateTime? createdAt;
   final String? source; // "API" or "Cache" or other metadata
+  /// X account used to fetch metadata, "Public" for anonymous requests.
+  /// Null for old cached videos whose provenance cannot be established.
+  final String? retrievedVia;
   final bool isLiked;
   final int favoriteCount;
   final int replyCount;
@@ -30,6 +33,7 @@ class Tweet {
     this.isVideo = false,
     DateTime? createdAt,
     this.source,
+    this.retrievedVia,
     this.isLiked = false,
     this.favoriteCount = 0,
     this.replyCount = 0,
@@ -54,6 +58,7 @@ class Tweet {
     bool? isVideo,
     DateTime? createdAt,
     String? source,
+    String? retrievedVia,
     bool? isLiked,
     int? favoriteCount,
     int? replyCount,
@@ -72,6 +77,7 @@ class Tweet {
       isVideo: isVideo ?? this.isVideo,
       createdAt: createdAt ?? this.createdAt,
       source: source ?? this.source,
+      retrievedVia: retrievedVia ?? this.retrievedVia,
       isLiked: isLiked ?? this.isLiked,
       favoriteCount: favoriteCount ?? this.favoriteCount,
       replyCount: replyCount ?? this.replyCount,
