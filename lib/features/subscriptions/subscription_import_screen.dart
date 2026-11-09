@@ -1,18 +1,20 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'subscription_list_screen.dart';
 import 'package:flutter/services.dart';
 import '../../core/client/twitter_client.dart';
 import '../../core/database/repository.dart';
 
-class SubscriptionImportScreen extends StatefulWidget {
+class SubscriptionImportScreen extends ConsumerStatefulWidget {
   const SubscriptionImportScreen({super.key});
 
   @override
-  State<SubscriptionImportScreen> createState() =>
+  ConsumerState<SubscriptionImportScreen> createState() =>
       _SubscriptionImportScreenState();
 }
 
-class _SubscriptionImportScreenState extends State<SubscriptionImportScreen> {
+class _SubscriptionImportScreenState extends ConsumerState<SubscriptionImportScreen> {
   String? _fromScreenName;
   StreamController<int>? _streamController;
   bool _isImporting = false;
@@ -42,6 +44,7 @@ class _SubscriptionImportScreenState extends State<SubscriptionImportScreen> {
       final following = await client.fetchFollowing(user.id);
       if (following.isNotEmpty) {
         await Repository.insertSubscriptions(following);
+        ref.invalidate(subscriptionListProvider);
         _streamController?.add(following.length);
       } else {
         _streamController?.add(0);
