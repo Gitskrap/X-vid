@@ -883,9 +883,14 @@ class TwitterClient {
         },
       );
       await _waitForTurn();
-      final response = await TwitterAccount.fetch(uri)
-          .timeout(Duration(seconds: timeoutSeconds));
-      _releaseTurn();
+      late final dynamic response;
+      try {
+        response = await TwitterAccount.fetch(uri)
+            .timeout(Duration(seconds: timeoutSeconds));
+      } finally {
+        // Never block subsequent search requests when the timeline times out.
+        _releaseTurn();
+      }
 
       if (response.statusCode == 429) {
         _handleRateLimit(cooldownMinutes);
