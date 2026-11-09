@@ -3,6 +3,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:ffcache/ffcache.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'x_api_constants.dart';
 import 'transaction_id_service.dart';
 import '../database/entities.dart';
@@ -15,10 +16,37 @@ class TwitterAccount {
 
   static Account? get currentAccount => _currentAccount;
 
+  static const _selectedAccountKey = 'twitter_video_active_account';
+
   static Future<void> init() async {
     final accounts = await Repository.getAccounts();
+    final prefs = await SharedPreferences.getInstance();
+    final selected = prefs.getString(_selectedAccountKey);
+    _currentAccount = null;
     if (accounts.isNotEmpty) {
-      _currentAccount = accounts.first;
+      _currentAccount = accounts.firstWhere(
+        (account) => account.screenName.toLowerCase() == selected?.toLowerCase(),
+        orElse: () => accounts.first,
+      );
+    }
+  }
+
+  /// A stored account must have both X session cookies and the CSRF token.
+  /// Presence of the cookies does not guarantee that X has not expired them.
+  static bool hasAuthSession(Account? account) {
+    if (account == null) return false;
+    try {
+      final headers = jsonDecode(account.authHeader);
+      if (headers is! Map) return false;
+      final cookies = (headers['Cookie'] ?? headers['cookie'] ?? '').toString();
+      final names = cookies.split(';').map(
+        (cookie) => cookie.trim().split('=').first.toLowerCase(),
+      ).toSet();
+      return names.contains('auth_token') &&
+          names.contains('ct0') &&
+          (headers['x-csrf-token']?.toString().isNotEmpty ?? false);
+    } catch (_) {
+      return false;
     }
   }
 
@@ -27,7 +55,8 @@ class TwitterAccount {
   }
 
   static String _getCacheKey(Uri uri) {
-    return md5.convert(utf8.encode(uri.toString())).toString();
+    // Prevent serving another X account's cached authenticated response.
+    return md5.convert(utf8.encode('${_currentAccount?.id ?? 'guest'}:$uri')).toString();
   }
 
   static String compactForLog(Object? value, {int? maxLength}) {
@@ -76,6 +105,12 @@ class TwitterAccount {
       Map<String, String>? headers,
       Duration? cacheDuration}) async {
     final requestSummary = _summarizeRequest(uri, method, body);
+    if (_currentAccount == null) {
+      await init();
+    }
+    if (_currentAccount != null && !hasAuthSession(_currentAccount)) {
+      throw StateError('Session X incomplète. Reconnecte ton compte X.');
+    }
     final cacheKey = _getCacheKey(uri);
     if (method == 'GET' && cacheDuration != null) {
       final cachedBody = await _cache.getString(cacheKey);
@@ -88,10 +123,6 @@ class TwitterAccount {
       }
       AppLogger.log(
           'HTTP cache miss: $requestSummary ttl=${cacheDuration.inMinutes}m');
-    }
-
-    if (_currentAccount == null) {
-      await init();
     }
 
     final combinedHeaders = <String, String>{
@@ -182,13 +213,27 @@ class TwitterAccount {
     return response;
   }
 
-  static void setCurrentAccount(Account account) {
+  static Future<void> setCurrentAccount(Account account) async {
     _currentAccount = account;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_selectedAccountKey, account.screenName);
   }
 
-  static Future<void> logout() async {
-    final db = await Repository.database;
-    await db.delete(tableAccounts);
-    _currentAccount = null;
+  /// Disconnect one saved X session, keeping other accounts available.
+  static Future<void> logout({Account? account}) async {
+    final target = account ?? _currentAccount;
+    if (target == null) return;
+    await Repository.deleteAccount(target.id);
+    if (_currentAccount?.id == target.id) {
+      final remaining = await Repository.getAccounts();
+      _currentAccount = remaining.isEmpty ? null : remaining.first;
+      final prefs = await SharedPreferences.getInstance();
+      if (_currentAccount == null) {
+        await prefs.remove(_selectedAccountKey);
+      } else {
+        await prefs.setString(
+          _selectedAccountKey, _currentAccount!.screenName);
+      }
+    }
   }
 }
