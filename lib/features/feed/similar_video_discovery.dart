@@ -13,7 +13,7 @@ List<String> topicsFromSubscribedVideos(
     'vous', 'nous', 'tous', 'tout', 'cette', 'comme', 'plus', 'moins',
     'from', 'this', 'that', 'with', 'have', 'your', 'just', 'new', 'next',
     'what', 'when', 'where', 'pourquoi', 'merci', 'bonjour', 'because',
-    'here', 'there', 'part', 'dont', 'dont', 'about', 'the', 'and',
+    'here', 'there', 'part', 'dont', 'about', 'the', 'and',
     'regarde', 'regardez', 'voir', 'bien', 'bonne', 'great', 'fresh',
     'original', 'posting', 'viral', 'latest',
   };
@@ -60,11 +60,11 @@ List<Tweet> mixRelatedVideos(
   if (suggested.isEmpty) return subscriptions;
   final output = <Tweet>[];
   var index = 0;
+  var localCount = 0;
   for (final item in subscriptions) {
     output.add(item);
-    if (output.length > 0 &&
-        output.where((t) => t.source != 'Découverte').length % interval == 0 &&
-        index < suggested.length) {
+    localCount++;
+    if (localCount % interval == 0 && index < suggested.length) {
       output.add(suggested[index++].copyWith(source: 'Découverte'));
     }
   }
