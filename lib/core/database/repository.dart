@@ -173,10 +173,13 @@ class Repository {
 
   static Future<List<Account>> getAccounts() async {
     final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(tableAccounts);
-    return List.generate(maps.length, (i) {
-      return Account.fromMap(maps[i]);
-    });
+    final maps = await db.query(tableAccounts, orderBy: 'rowid DESC');
+    return maps.map(Account.fromMap).toList();
+  }
+
+  static Future<void> deleteAccount(String id) async {
+    final db = await database;
+    await db.delete(tableAccounts, where: 'id = ?', whereArgs: [id]);
   }
 
   static Future<void> insertSubscription(Subscription sub) async {
