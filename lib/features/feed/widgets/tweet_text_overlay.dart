@@ -37,12 +37,6 @@ class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
 
     return Stack(
       children: [
-        // Shows the retrieval identity, not the video's author or CDN login.
-        Positioned(
-          top: widget.isFullscreen ? 12 : 78,
-          right: 12,
-          child: _buildRetrievalIndicator(),
-        ),
         // Text Overlay (Bottom)
         Positioned(
           bottom: bottomPadding,
@@ -83,41 +77,48 @@ class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
 
   Widget _buildRetrievalIndicator() {
     final via = widget.tweet.retrievedVia;
+    final cached = via == null || via.isEmpty;
     final isPublic = via == 'Public';
-    final unknown = via == null || via.isEmpty;
-    final label = isPublic
-        ? 'Public'
-        : unknown
-            ? 'Origine inconnue'
-            : via.startsWith('@')
-                ? via
-                : '@$via';
+    final label = cached
+        ? 'Cache'
+        : isPublic
+            ? 'Public'
+            : via.startsWith('@') ? via : '@$via';
     return Tooltip(
-      message: unknown
-          ? 'Vidéo en cache : compte utilisé non enregistré'
+      message: cached
+          ? 'Vidéo enregistrée avant le suivi des comptes : '
+              'impossible de déterminer le compte utilisé'
           : isPublic
-              ? 'Vidéo récupérée sans compte X via une source publique'
-              : 'Vidéo récupérée avec la session X $label',
+              ? 'Récupérée sans compte X (service public)'
+              : 'Récupérée avec le compte X $label',
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+        constraints: const BoxConstraints(maxWidth: 165),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
         decoration: BoxDecoration(
-          color: const Color(0xD91B1E23),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white30),
+          color: const Color(0xB8293238),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              isPublic ? Icons.public
-                  : unknown ? Icons.help_outline : Icons.account_circle_outlined,
-              size: 15,
+              cached ? Icons.storage_outlined
+                  : isPublic ? Icons.public : Icons.account_circle_outlined,
               color: const Color(0xFF70F0CE),
+              size: 12,
             ),
-            const SizedBox(width: 5),
-            Text('Via $label', style: const TextStyle(
-              color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600,
-            )),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white70, fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -276,6 +277,8 @@ class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
                     ],
                   ),
                 ),
+              const SizedBox(height: 3),
+              _buildRetrievalIndicator(),
             ],
           ),
         ),
