@@ -261,6 +261,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
         settings.loadBatchSize * settings.dbCandidateMultiplier,
         avoidWatchedContent: settings.avoidWatchedContent,
         filters: settings.filters,
+        allowedHandles: allowedHandles,
       );
       final localTagged = onlyLocalSubscriptionVideos(
         localPool, allowedHandles,
@@ -362,6 +363,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
         settings.loadBatchSize * settings.dbCandidateMultiplier,
         avoidWatchedContent: settings.avoidWatchedContent,
         filters: settings.filters,
+        allowedHandles: allowedHandles,
       );
       final localTagged = onlyLocalSubscriptionVideos(
         localPool, allowedHandles,
@@ -449,6 +451,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
           settings.loadBatchSize * settings.dbCandidateMultiplier,
           avoidWatchedContent: settings.avoidWatchedContent,
           filters: settings.filters,
+          allowedHandles: allowedHandles,
         );
 
         var localNew = onlyLocalSubscriptionVideos(
