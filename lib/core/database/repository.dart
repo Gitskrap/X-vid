@@ -164,6 +164,10 @@ class Repository {
 
   static Future<void> insertAccount(Account account) async {
     final db = await database;
+    // Keep one saved X session per handle when the user reconnects.
+    await db.delete(tableAccounts,
+      where: 'LOWER(screen_name) = LOWER(?) AND id <> ?',
+      whereArgs: [account.screenName, account.id]);
     await db.insert(
       tableAccounts,
       account.toMap(),
