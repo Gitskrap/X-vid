@@ -10,6 +10,8 @@ import '../../core/database/repository.dart';
 import '../../core/client/discovery_engine.dart';
 import '../../core/utils/app_logger.dart';
 import '../settings/settings_provider.dart';
+import '../subscriptions/subscription_list_screen.dart';
+import 'local_video_filter.dart';
 import '../player/player_pool_provider.dart';
 
 final twitterClientProvider = Provider((ref) => TwitterClient());
@@ -50,7 +52,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
   /// Read-only fallback when X does not return videos for followed accounts.
   /// FxEmbed never receives the user's X cookies or tokens.
   Future<TweetResponse> _fetchPublicSubscriptions(int maxVideos) async {
-    final subscriptions = await Repository.getSubscriptions();
+    final subscriptions = ref.read(subscriptionListProvider).allSubscriptions;
     if (subscriptions.isEmpty) return TweetResponse(tweets: []);
     final limit = subscriptions.length < 5 ? subscriptions.length : 5;
     final selected = [
@@ -238,8 +240,17 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
   @override
   FutureOr<FeedState> build() async {
     final settings = ref.watch(settingsProvider);
-    // Rebuild the feed after login, switching accounts, or logout.
+    // The local list, not X's follow list, is the sole source of creators.
+    final subscriptions = ref.watch(subscriptionListProvider);
+    // Rebuild after login, switching accounts, or logout.
     ref.watch(accountProvider);
+    if (subscriptions.isLoading) {
+      return FeedState(tweets: [], isRefreshing: true);
+    }
+    final allowedHandles = localVideoHandles(subscriptions.allSubscriptions);
+    if (allowedHandles.isEmpty) {
+      return FeedState(tweets: [], isRefreshing: false);
+    }
 
     debugPrint(
         'XFLOW: Building FeedNotifier. fetchStrategy: ${settings.fetchStrategy}');
@@ -251,10 +262,9 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
         avoidWatchedContent: settings.avoidWatchedContent,
         filters: settings.filters,
       );
-      final localTagged = localPool
-          .where((t) => t.isVideo && t.mediaUrls.isNotEmpty)
-          .map((t) => t.copyWith(source: 'Cache'))
-          .toList();
+      final localTagged = onlyLocalSubscriptionVideos(
+        localPool, allowedHandles,
+      ).map((t) => t.copyWith(source: 'Cache')).toList();
       AppLogger.log(
           'XFLOW: Cold start: Retrieved ${localPool.length} local candidates');
 
@@ -298,40 +308,34 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
 
     final client = ref.read(twitterClientProvider);
     final settings = ref.read(settingsProvider);
+    final allowedHandles = localVideoHandles(
+        ref.read(subscriptionListProvider).allSubscriptions);
+    if (allowedHandles.isEmpty) {
+      if (ref.mounted && state.hasValue) {
+        state = AsyncData(FeedState(tweets: [], isRefreshing: false));
+      }
+      return;
+    }
 
     debugPrint('XFLOW: Background refresh started');
 
     try {
       // 1. Fetch from API
-      TweetResponse freshResponse;
-      if (settings.fetchStrategy == FeedSort.videomixer) {
-        freshResponse = await client.fetchVideoMixer(
-          count: settings.timelineBatchSize,
-          filters: settings.filters,
-        );
-      } else if (settings.fetchStrategy == FeedSort.algorithmic) {
-        freshResponse = await client.fetchAlgorithmicTimeline(
-          count: settings.timelineBatchSize,
-          filters: settings.filters,
-        );
-      } else if (settings.fetchStrategy == FeedSort.chronological) {
-        freshResponse = await client.fetchChronologicalTimeline(
-          count: settings.timelineBatchSize,
-          filters: settings.filters,
-        );
-      } else {
-        freshResponse = await client.fetchSubscribedMedia(
-          sort: settings.fetchStrategy,
-          filters: settings.filters,
-          subBatchSize: settings.syncBatchSize,
-          loadBatchSize: settings.initialSyncCount,
-          cooldownMinutes: settings.cooldownDuration,
-          strictSubscriptionsOnly: settings.strictSubscriptionsOnly,
-          includeNativeRetweets: settings.includeNativeRetweets,
-          useChunkedSubscriptions: settings.useChunkedSubscriptions,
-          minFaves: settings.minFavesFilter,
-        );
-      }
+      // Do not use For You, Following or global trending as home sources.
+      // Only author handles explicitly saved inside Twitter vidéo qualify.
+      TweetResponse freshResponse = await client.fetchSubscribedMedia(
+        sort: settings.fetchStrategy == FeedSort.popular
+            ? FeedSort.popular
+            : FeedSort.latest,
+        filters: const {MediaFilter.video},
+        subBatchSize: settings.syncBatchSize,
+        loadBatchSize: settings.initialSyncCount,
+        cooldownMinutes: settings.cooldownDuration,
+        strictSubscriptionsOnly: true,
+        includeNativeRetweets: false,
+        useChunkedSubscriptions: settings.useChunkedSubscriptions,
+        minFaves: settings.minFavesFilter,
+      );
 
       if (freshResponse.tweets.isEmpty) {
         final publicResponse =
@@ -339,9 +343,10 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
         if (publicResponse.tweets.isNotEmpty) freshResponse = publicResponse;
       }
 
-      final freshPool = freshResponse.tweets;
+      if (!ref.mounted) return;
+      final freshPool =
+          onlyLocalSubscriptionVideos(freshResponse.tweets, allowedHandles);
       final freshTagged = freshPool
-          .where((t) => t.isVideo && t.mediaUrls.isNotEmpty)
           .map((t) => t.copyWith(source: 'API'))
           .toList();
 
@@ -358,10 +363,9 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
         avoidWatchedContent: settings.avoidWatchedContent,
         filters: settings.filters,
       );
-      final localTagged = localPool
-          .where((t) => t.isVideo && t.mediaUrls.isNotEmpty)
-          .map((t) => t.copyWith(source: 'Cache'))
-          .toList();
+      final localTagged = onlyLocalSubscriptionVideos(
+        localPool, allowedHandles,
+      ).map((t) => t.copyWith(source: 'Cache')).toList();
 
       final currentAsync = ref.read(feedNotifierProvider);
       if (currentAsync.hasValue) {
@@ -404,6 +408,12 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
     if (currentState == null || currentState.isLoadingMore) return;
 
     final settings = ref.read(settingsProvider);
+    final allowedHandles = localVideoHandles(
+        ref.read(subscriptionListProvider).allSubscriptions);
+    if (allowedHandles.isEmpty) {
+      state = AsyncData(FeedState(tweets: [], isRefreshing: false));
+      return;
+    }
 
     state = AsyncData(currentState.copyWith(isLoadingMore: true));
 
@@ -441,7 +451,9 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
           filters: settings.filters,
         );
 
-        var localNew = dbCandidates.where((t) {
+        var localNew = onlyLocalSubscriptionVideos(
+          dbCandidates, allowedHandles,
+        ).where((t) {
           if (!t.isVideo || t.mediaUrls.isEmpty) return false;
           return !seenIds.contains(t.id) &&
               (t.mediaUrls.isEmpty || !seenMedia.contains(t.mediaUrls.first));
@@ -457,41 +469,22 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
         if (currentCursor != null) seenCursors.add(currentCursor);
 
         try {
-          final TweetResponse response;
-          if (settings.fetchStrategy == FeedSort.videomixer) {
-            response = await client.fetchVideoMixer(
-              cursor: currentCursor,
-              count: settings.timelineBatchSize,
-              filters: settings.filters,
-            );
-          } else if (settings.fetchStrategy == FeedSort.algorithmic) {
-            response = await client.fetchAlgorithmicTimeline(
-              cursor: currentCursor,
-              count: settings.timelineBatchSize,
-              filters: settings.filters,
-            );
-          } else if (settings.fetchStrategy == FeedSort.chronological) {
-            response = await client.fetchChronologicalTimeline(
-              cursor: currentCursor,
-              count: settings.timelineBatchSize,
-              filters: settings.filters,
-            );
-          } else {
-            response = await client.fetchSubscribedMedia(
-              cursor: currentCursor,
-              sort: settings.fetchStrategy,
-              filters: settings.filters,
-              subBatchSize: settings.syncBatchSize,
-              loadBatchSize: settings.loadBatchSize,
-              cooldownMinutes: settings.cooldownDuration,
-              strictSubscriptionsOnly: settings.strictSubscriptionsOnly,
-              includeNativeRetweets: settings.includeNativeRetweets,
-              useChunkedSubscriptions: settings.useChunkedSubscriptions,
-              minFaves: settings.minFavesFilter,
-              maxQueryLength: settings.maxQueryLength,
-              timeoutSeconds: settings.apiTimeoutSeconds,
-            );
-          }
+          final TweetResponse response = await client.fetchSubscribedMedia(
+            cursor: currentCursor,
+            sort: settings.fetchStrategy == FeedSort.popular
+                ? FeedSort.popular
+                : FeedSort.latest,
+            filters: const {MediaFilter.video},
+            subBatchSize: settings.syncBatchSize,
+            loadBatchSize: settings.loadBatchSize,
+            cooldownMinutes: settings.cooldownDuration,
+            strictSubscriptionsOnly: true,
+            includeNativeRetweets: false,
+            useChunkedSubscriptions: settings.useChunkedSubscriptions,
+            minFaves: settings.minFavesFilter,
+            maxQueryLength: settings.maxQueryLength,
+            timeoutSeconds: settings.apiTimeoutSeconds,
+          );
 
           // Once per load-more action, try public videos when native X
           // returns none. Do not loop on the public service indefinitely.
@@ -505,14 +498,16 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
             }
           }
 
-          final freshUnique = effectiveResponse.tweets.where((t) {
+          final localFresh = onlyLocalSubscriptionVideos(
+            effectiveResponse.tweets, allowedHandles);
+          final freshUnique = localFresh.where((t) {
             if (!t.isVideo || t.mediaUrls.isEmpty) return false;
             return !seenIds.contains(t.id) &&
                 (t.mediaUrls.isEmpty || !seenMedia.contains(t.mediaUrls.first));
           }).toList();
 
-          if (effectiveResponse.tweets.isNotEmpty) {
-            await Repository.insertCachedMedia(effectiveResponse.tweets);
+          if (localFresh.isNotEmpty) {
+            await Repository.insertCachedMedia(localFresh);
           }
 
           allNewTweets.addAll(freshUnique);
