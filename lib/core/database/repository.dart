@@ -277,7 +277,8 @@ class Repository {
   }
 
   static Future<List<Tweet>> getUnplayedCachedMedia(int limit,
-      {Set<MediaFilter>? filters}) async {
+      {Set<MediaFilter>? filters, Set<String>? allowedHandles}) async {
+    if (allowedHandles != null && allowedHandles.isEmpty) return [];
     final db = await database;
 
     // Use a subquery to exclude any tweets whose media_key has been played elsewhere
@@ -286,6 +287,11 @@ class Repository {
         ' AND (media_key IS NULL OR media_key NOT IN (SELECT media_key FROM $tableCachedMedia WHERE played_count > 0 AND media_key IS NOT NULL))';
 
     List<dynamic> whereArgs = [];
+    if (allowedHandles != null) {
+      whereClause += " AND LOWER(REPLACE(user_handle, '@', '')) IN "
+          "(${List.filled(allowedHandles.length, '?').join(',')})";
+      whereArgs.addAll(allowedHandles);
+    }
 
     if (filters != null && filters.isNotEmpty) {
       final conditions = <String>[];
@@ -354,14 +360,22 @@ class Repository {
     int limit, {
     required bool avoidWatchedContent,
     Set<MediaFilter>? filters,
+    Set<String>? allowedHandles,
   }) async {
+    if (allowedHandles != null && allowedHandles.isEmpty) return [];
     if (avoidWatchedContent) {
-      return getUnplayedCachedMedia(limit, filters: filters);
+      return getUnplayedCachedMedia(limit,
+          filters: filters, allowedHandles: allowedHandles);
     }
 
     final db = await database;
     String? whereClause;
     List<dynamic>? whereArgs;
+    if (allowedHandles != null) {
+      whereClause = "LOWER(REPLACE(user_handle, '@', '')) IN "
+          "(${List.filled(allowedHandles.length, '?').join(',')})";
+      whereArgs = allowedHandles.toList();
+    }
 
     if (filters != null && filters.isNotEmpty) {
       final conditions = <String>[];
@@ -379,8 +393,10 @@ class Repository {
         }
       }
       if (conditions.isNotEmpty) {
-        whereClause = '(${conditions.join(' OR ')})';
-        whereArgs = [];
+        final filterClause = '(${conditions.join(' OR ')})';
+        whereClause = whereClause == null
+            ? filterClause
+            : '$whereClause AND $filterClause';
       }
     }
 
