@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/client/twitter_client.dart';
 import '../../core/client/twitter_account.dart';
+import '../../core/client/account_provider.dart';
 import '../../core/models/tweet.dart';
 import '../../core/database/repository.dart';
 import '../../core/client/discovery_engine.dart';
@@ -200,6 +201,8 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
   @override
   FutureOr<FeedState> build() async {
     final settings = ref.watch(settingsProvider);
+    // Rebuild the feed after login, switching accounts, or logout.
+    ref.watch(accountProvider);
 
     debugPrint(
         'XFLOW: Building FeedNotifier. fetchStrategy: ${settings.fetchStrategy}');
