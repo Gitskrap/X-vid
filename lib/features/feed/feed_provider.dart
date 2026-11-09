@@ -94,9 +94,12 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
     final topics = topicsFromSubscribedVideos(examples, limit: 2);
     if (topics.isEmpty) return const [];
     final found = <String, Tweet>{};
+    final hasSession =
+        TwitterAccount.hasAuthSession(ref.read(accountProvider));
     for (final topic in topics) {
+      if (!ref.mounted) break;
       TweetResponse result = TweetResponse(tweets: []);
-      if (TwitterAccount.hasAuthSession(ref.read(accountProvider))) {
+      if (hasSession) {
         try {
           result = await client.fetchTrendingMedia(
             query: topic,
