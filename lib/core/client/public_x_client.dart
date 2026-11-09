@@ -171,6 +171,36 @@ class PublicXClient {
     return tweets;
   }
 
+  /// Search public posts without sending X cookies or credentials.
+  /// Uses the documented FxEmbed /2/search endpoint.
+  Future<TweetResponse> searchVideos(
+    String query, {
+    String? cursor,
+    int count = 30,
+    bool top = false,
+  }) async {
+    final text = query.trim();
+    if (text.isEmpty) return TweetResponse(tweets: []);
+    if (text.length > 180) {
+      throw const FormatException('Recherche trop longue.');
+    }
+    final filtered = text.contains('filter:videos')
+        ? text : '$text filter:videos';
+    final body = await _get(Uri.https(_host, '/2/search', {
+      'q': filtered,
+      'feed': top ? 'top' : 'latest',
+      'count': count.clamp(1, 100).toString(),
+      if (cursor?.isNotEmpty == true) 'cursor': cursor!,
+    }));
+    final cursorValue = body['cursor'];
+    final bottom = cursorValue is Map
+        ? cursorValue['bottom']?.toString() : null;
+    return TweetResponse(
+      tweets: decodeMediaResults(body),
+      cursorBottom: bottom?.isEmpty == true ? null : bottom,
+    );
+  }
+
   Future<TweetResponse> userVideos(
     String screenName, {String? cursor, int count = 20}
   ) async {
