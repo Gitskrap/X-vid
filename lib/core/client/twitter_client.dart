@@ -715,16 +715,8 @@ class TwitterClient {
   }) async {
     var subs = await Repository.getSubscriptions();
 
-    if (subs.isEmpty) {
-      final currentAccount = TwitterAccount.currentAccount;
-      if (currentAccount != null && currentAccount.restId.isNotEmpty) {
-        subs = await fetchFollowing(currentAccount.restId,
-            cooldownMinutes: cooldownMinutes);
-        if (subs.isNotEmpty) {
-          await Repository.insertSubscriptions(subs);
-        }
-      }
-    }
+    // Never auto-import the authenticated X account's follows into the
+    // separate, locally maintained Twitter vidéo subscriptions.
 
     if (subs.isEmpty) {
       if (strictSubscriptionsOnly) {
