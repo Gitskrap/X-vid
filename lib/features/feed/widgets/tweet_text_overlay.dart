@@ -278,7 +278,26 @@ class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
                   ),
                 ),
               const SizedBox(height: 3),
-              _buildRetrievalIndicator(),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  _buildRetrievalIndicator(),
+                  if (widget.tweet.source == 'Découverte')
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 2),
+                      child: Text(
+                        '✨ Découverte',
+                        style: TextStyle(
+                          color: Color(0xFF70F0CE),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ],
           ),
         ),
