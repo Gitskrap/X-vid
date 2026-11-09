@@ -2,9 +2,11 @@ name: Twitter vidéo - APK Android
 on:
   push:
     branches: [master]
+  pull_request:
+    branches: [master]
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -25,7 +27,7 @@ jobs:
       - name: Analyze app
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
       - name: Test timestamp and engagement parsing
-        run: flutter test test/core/utils/date_utils_test.dart test/core/utils/engagement_utils_test.dart test/core/database/engagement_cache_test.dart test/features/cast/cast_quality_test.dart test/features/search/video_search_utils_test.dart test/core/client/twitter_account_test.dart test/features/subscriptions/subscription_handle_test.dart test/core/client/public_x_client_test.dart test/features/subscriptions/subscription_updates_test.dart
+        run: flutter test test/core/utils/date_utils_test.dart test/core/utils/engagement_utils_test.dart test/core/database/engagement_cache_test.dart test/features/cast/cast_quality_test.dart test/features/search/video_search_utils_test.dart test/core/client/twitter_account_test.dart test/features/subscriptions/subscription_handle_test.dart test/core/client/public_x_client_test.dart test/features/subscriptions/subscription_updates_test.dart test/features/feed/local_video_filter_test.dart test/core/database/retrieval_source_test.dart
       - name: Restore permanent signing key
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -41,15 +43,28 @@ jobs:
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/twitter-video-release.p12
           printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=twittervideo\nstoreFile=../twitter-video-release.p12\n' "$ANDROID_SIGNING_PASSWORD" "$ANDROID_SIGNING_PASSWORD" > android/key.properties
       - name: Build release ARM64
-        run: flutter build apk --release --target-platform android-arm64 --build-name 0.16.0 --build-number 16
+        run: flutter build apk --release --target-platform android-arm64 --build-name 0.17.0 --build-number 17
       - name: Name APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk Twitter-video-0.16.0-arm64.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk Twitter-video-0.17.0-arm64.apk
       - uses: actions/upload-artifact@v4
         with:
           name: Twitter-video-Android-ARM64
-          path: Twitter-video-0.16.0-arm64.apk
+          path: Twitter-video-0.17.0-arm64.apk
           if-no-files-found: error
           retention-days: 30
+      - name: Publish direct APK in GitHub Releases
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: Gitskrap/X-vid
+        run: |
+          if ! gh release view v0.17.0 >/dev/null 2>&1; then
+            gh release create v0.17.0 \
+              --target master \
+              --title "Twitter vidéo 0.17.0" \
+              --notes "Fil Vidéos limité aux abonnements locaux ; badge du compte X ou de la source publique utilisée. APK ARM64 signé, téléchargement direct."
+          fi
+          gh release upload v0.17.0 Twitter-video-0.17.0-arm64.apk --clobber
       - name: Clear local signing material
         if: always()
         shell: bash

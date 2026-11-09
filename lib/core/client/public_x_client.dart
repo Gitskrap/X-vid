@@ -162,6 +162,7 @@ class PublicXClient {
                 (when * 1000).toInt(), isUtc: true).toLocal()
             : null,
         source: 'FxEmbed',
+        retrievedVia: 'Public',
         favoriteCount: likes is num ? likes.toInt() : 0,
         replyCount: replies is num ? replies.toInt() : 0,
         favoriteCountKnown: likes is num,

@@ -13,6 +13,8 @@ import '../../core/client/account_provider.dart';
 import '../../core/navigation/navigation_provider.dart';
 import 'widgets/tweet_text_overlay.dart';
 import '../cast/cast_video_button.dart';
+import '../subscriptions/subscription_list_screen.dart';
+import 'local_video_filter.dart';
 import '../player/video_ui_provider.dart';
 
 class TiktokFeedScreen extends ConsumerStatefulWidget {
@@ -115,6 +117,19 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // A local follow/unfollow changes the eligible creators immediately.
+    ref.listen(subscriptionListProvider, (previous, next) {
+      final oldHandles = localVideoHandles(
+          previous?.allSubscriptions ?? const []);
+      final newHandles = localVideoHandles(next.allSubscriptions);
+      if (oldHandles.length == newHandles.length &&
+          oldHandles.containsAll(newHandles)) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (_pageController.hasClients) _pageController.jumpToPage(0);
+        setState(() => _currentIndex = 0);
+      });
+    });
     final account = ref.watch(accountProvider);
     final videoUiHidden = ref.watch(videoUiHiddenProvider);
     final landscape = MediaQuery.orientationOf(context) == Orientation.landscape;
@@ -262,18 +277,29 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
   }
 
   Widget _buildNoItemsState() {
+    final emptyList =
+        ref.watch(subscriptionListProvider).allSubscriptions.isEmpty;
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('No media found.',
-              style: TextStyle(color: Colors.white70)),
-          const SizedBox(height: 16),
-          FilledButton.tonal(
-            onPressed: () => _goToLogin(),
-            child: const Text('Login to X'),
-          ),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              emptyList
+                  ? 'Ajoute des comptes dans Abonnements pour remplir ton fil.'
+                  : 'Aucune vidéo disponible parmi tes abonnements locaux.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.tonal(
+              onPressed: () => ref.read(navigationProvider.notifier)
+                  .setTab(MainTab.subscriptions),
+              child: const Text('Gérer mes abonnements'),
+            ),
+          ],
+        ),
       ),
     );
   }

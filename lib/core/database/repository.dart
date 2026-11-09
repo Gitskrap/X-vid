@@ -30,7 +30,7 @@ class Repository {
     }
     return await openDatabase(
       path,
-      version: 10,
+      version: 11,
       onCreate: (db, version) async {
         await db.execute(
           'CREATE TABLE $tableAccounts (id TEXT PRIMARY KEY, screen_name TEXT, rest_id TEXT, auth_header TEXT)',
@@ -58,7 +58,8 @@ class Repository {
             played_count INTEGER DEFAULT 0,
             last_played_at INTEGER,
             duration_watched INTEGER DEFAULT 0,
-            last_suggested_at INTEGER
+            last_suggested_at INTEGER,
+            retrieved_via TEXT
           )
         ''');
         await db.execute(
@@ -136,6 +137,10 @@ class Repository {
             'ALTER TABLE $tableCachedMedia ADD COLUMN reply_count INTEGER');
           await db.execute(
             'ALTER TABLE $tableCachedMedia ADD COLUMN is_liked INTEGER');
+        }
+        if (oldVersion < 11) {
+          await db.execute(
+            'ALTER TABLE $tableCachedMedia ADD COLUMN retrieved_via TEXT');
         }
       },
     );
@@ -232,6 +237,7 @@ class Repository {
           'media_key': tweet.mediaKey,
           'media_urls': jsonEncode(tweet.mediaUrls),
           'thumbnail_url': tweet.thumbnailUrl,
+          'retrieved_via': tweet.retrievedVia,
           'is_video': tweet.isVideo ? 1 : 0,
           'created_at': tweet.createdAt?.millisecondsSinceEpoch,
           'favorite_count': tweet.favoriteCountKnown ? tweet.favoriteCount : null,
@@ -243,6 +249,9 @@ class Repository {
       // Update only newly retrieved metadata. Keep played_count, history and
       // any reliable previously cached metric if X omitted it this time.
       final updates = <String, Object?>{};
+      if (tweet.retrievedVia != null) {
+        updates['retrieved_via'] = tweet.retrievedVia;
+      }
       if (tweet.favoriteCountKnown) {
         updates['favorite_count'] = tweet.favoriteCount;
       }
@@ -268,7 +277,8 @@ class Repository {
   }
 
   static Future<List<Tweet>> getUnplayedCachedMedia(int limit,
-      {Set<MediaFilter>? filters}) async {
+      {Set<MediaFilter>? filters, Set<String>? allowedHandles}) async {
+    if (allowedHandles != null && allowedHandles.isEmpty) return [];
     final db = await database;
 
     // Use a subquery to exclude any tweets whose media_key has been played elsewhere
@@ -277,6 +287,11 @@ class Repository {
         ' AND (media_key IS NULL OR media_key NOT IN (SELECT media_key FROM $tableCachedMedia WHERE played_count > 0 AND media_key IS NOT NULL))';
 
     List<dynamic> whereArgs = [];
+    if (allowedHandles != null) {
+      whereClause += " AND LOWER(REPLACE(user_handle, '@', '')) IN "
+          "(${List.filled(allowedHandles.length, '?').join(',')})";
+      whereArgs.addAll(allowedHandles);
+    }
 
     if (filters != null && filters.isNotEmpty) {
       final conditions = <String>[];
@@ -318,6 +333,7 @@ class Repository {
         mediaUrls:
             List<String>.from(jsonDecode(maps[i]['media_urls'] as String)),
         thumbnailUrl: maps[i]['thumbnail_url'] as String?,
+        retrievedVia: maps[i]['retrieved_via'] as String?,
         isVideo: (maps[i]['is_video'] as int) == 1,
         favoriteCount: (maps[i]['favorite_count'] as int?) ?? 0,
         replyCount: (maps[i]['reply_count'] as int?) ?? 0,
@@ -344,14 +360,22 @@ class Repository {
     int limit, {
     required bool avoidWatchedContent,
     Set<MediaFilter>? filters,
+    Set<String>? allowedHandles,
   }) async {
+    if (allowedHandles != null && allowedHandles.isEmpty) return [];
     if (avoidWatchedContent) {
-      return getUnplayedCachedMedia(limit, filters: filters);
+      return getUnplayedCachedMedia(limit,
+          filters: filters, allowedHandles: allowedHandles);
     }
 
     final db = await database;
     String? whereClause;
     List<dynamic>? whereArgs;
+    if (allowedHandles != null) {
+      whereClause = "LOWER(REPLACE(user_handle, '@', '')) IN "
+          "(${List.filled(allowedHandles.length, '?').join(',')})";
+      whereArgs = allowedHandles.toList();
+    }
 
     if (filters != null && filters.isNotEmpty) {
       final conditions = <String>[];
@@ -369,8 +393,10 @@ class Repository {
         }
       }
       if (conditions.isNotEmpty) {
-        whereClause = '(${conditions.join(' OR ')})';
-        whereArgs = [];
+        final filterClause = '(${conditions.join(' OR ')})';
+        whereClause = whereClause == null
+            ? filterClause
+            : '$whereClause AND $filterClause';
       }
     }
 
@@ -392,6 +418,7 @@ class Repository {
         mediaUrls:
             List<String>.from(jsonDecode(maps[i]['media_urls'] as String)),
         thumbnailUrl: maps[i]['thumbnail_url'] as String?,
+        retrievedVia: maps[i]['retrieved_via'] as String?,
         isVideo: (maps[i]['is_video'] as int) == 1,
         favoriteCount: (maps[i]['favorite_count'] as int?) ?? 0,
         replyCount: (maps[i]['reply_count'] as int?) ?? 0,
@@ -495,6 +522,7 @@ class Repository {
         mediaUrls:
             List<String>.from(jsonDecode(maps[i]['media_urls'] as String)),
         thumbnailUrl: maps[i]['thumbnail_url'] as String?,
+        retrievedVia: maps[i]['retrieved_via'] as String?,
         isVideo: (maps[i]['is_video'] as int) == 1,
         favoriteCount: (maps[i]['favorite_count'] as int?) ?? 0,
         replyCount: (maps[i]['reply_count'] as int?) ?? 0,
@@ -554,6 +582,7 @@ class Repository {
         mediaUrls:
             List<String>.from(jsonDecode(maps[i]['media_urls'] as String)),
         thumbnailUrl: maps[i]['thumbnail_url'] as String?,
+        retrievedVia: maps[i]['retrieved_via'] as String?,
         isVideo: (maps[i]['is_video'] as int) == 1,
         favoriteCount: (maps[i]['favorite_count'] as int?) ?? 0,
         replyCount: (maps[i]['reply_count'] as int?) ?? 0,

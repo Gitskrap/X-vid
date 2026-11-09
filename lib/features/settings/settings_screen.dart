@@ -8,6 +8,7 @@ import '../auth/login_screen.dart';
 import '../../core/database/repository.dart';
 import '../../core/utils/media_cache_manager.dart';
 import '../feed/feed_provider.dart';
+import '../subscriptions/subscription_list_screen.dart';
 import '../subscriptions/subscription_import_screen.dart';
 import 'log_viewer_screen.dart';
 
@@ -321,22 +322,6 @@ class _SettingsTile extends StatelessWidget {
 class PlaybackSettingsPage extends ConsumerWidget {
   const PlaybackSettingsPage({super.key});
 
-  String _getFeedSortLabel(FeedSort sort) {
-    switch (sort) {
-      case FeedSort.latest:
-        return 'Subs: Latest';
-      case FeedSort.popular:
-        return 'Subs: Popular';
-      case FeedSort.trending:
-        return 'Subs: Trending';
-      case FeedSort.algorithmic:
-        return 'For You (X)';
-      case FeedSort.chronological:
-        return 'Following (X)';
-      case FeedSort.videomixer:
-        return 'Video Mixer (X)';
-    }
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -347,22 +332,12 @@ class PlaybackSettingsPage extends ConsumerWidget {
       appBar: AppBar(title: const Text('Playback & Feed')),
       body: ListView(
         children: [
-          ListTile(
-            title: const Text('Content Strategy'),
-            subtitle:
-                Text('Current: ${_getFeedSortLabel(settings.fetchStrategy)}'),
-            trailing: DropdownButton<FeedSort>(
-              value: settings.fetchStrategy,
-              items: FeedSort.values
-                  .map((sort) => DropdownMenuItem(
-                        value: sort,
-                        child: Text(_getFeedSortLabel(sort)),
-                      ))
-                  .toList(),
-              onChanged: (val) => val != null
-                  ? notifier.updateDiscoveryParam(fetchStrategy: val)
-                  : null,
-            ),
+          const ListTile(
+            leading: Icon(Icons.people_outline),
+            title: Text('Vidéos : abonnements locaux uniquement'),
+            subtitle: Text('Les comptes enregistrés dans Twitter vidéo '
+                'définissent le fil. Aucun ajout automatique depuis X.'),
+            trailing: Icon(Icons.lock_outline),
           ),
           SwitchListTile(
             title: const Text('Autoplay'),
@@ -663,6 +638,7 @@ class SubscriptionSettingsPage extends ConsumerWidget {
                 style: TextStyle(color: Colors.orange)),
             onTap: () async {
               await Repository.clearSubscriptions();
+              ref.invalidate(subscriptionListProvider);
               ref.invalidate(feedNotifierProvider);
               if (context.mounted) {
                 ScaffoldMessenger.of(context)
