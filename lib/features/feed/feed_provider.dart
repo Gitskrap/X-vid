@@ -139,6 +139,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
       final previous = latest.tweets[index];
 
       final merged = previous.copyWith(
+        retrievedVia: fresh.retrievedVia,
         favoriteCount: fresh.favoriteCountKnown
             ? fresh.favoriteCount
             : previous.favoriteCount,
