@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'settings_provider.dart';
 import '../../core/client/account_provider.dart';
+import '../../core/client/twitter_account.dart';
+import '../../core/database/entities.dart';
+import '../auth/login_screen.dart';
 import '../../core/database/repository.dart';
 import '../../core/utils/media_cache_manager.dart';
 import '../feed/feed_provider.dart';
@@ -46,6 +49,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 16),
         children: [
+          const _AccountSettingsSection(),
           _SettingsGroup(
             title: 'Experience',
             children: [
@@ -141,22 +145,103 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     MaterialPageRoute(
                         builder: (c) => const DiagnosticSettingsPage())),
               ),
-              _SettingsTile(
-                icon: Icons.logout,
-                title: 'Logout',
-                titleColor: Colors.redAccent,
-                onTap: () async {
-                  final navigator = Navigator.of(context);
-                  await ref.read(accountProvider.notifier).logout();
-                  if (!mounted) return;
-                  ref.invalidate(feedNotifierProvider);
-                  navigator.pop();
-                },
-              ),
             ],
           ),
         ],
       ),
+    );
+  }
+}
+
+
+/// Shows actual stored sessions, not the accounts followed in Subscriptions.
+class _AccountSettingsSection extends ConsumerWidget {
+  const _AccountSettingsSection();
+
+  Future<void> _connect(BuildContext context, WidgetRef ref) async {
+    final connected = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+    );
+    if (connected == true && context.mounted) {
+      ref.invalidate(feedNotifierProvider);
+    }
+  }
+
+  Future<void> _activate(WidgetRef ref, Account account) async {
+    await ref.read(accountProvider.notifier).login(account);
+    ref.invalidate(feedNotifierProvider);
+  }
+
+  Future<void> _disconnect(WidgetRef ref, Account account) async {
+    await ref.read(accountProvider.notifier).logout(account: account);
+    ref.invalidate(feedNotifierProvider);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final active = ref.watch(accountProvider);
+    final saved = ref.watch(savedAccountsProvider);
+
+    return _SettingsGroup(
+      title: 'Comptes X',
+      children: [
+        saved.when(
+          data: (accounts) => Column(
+            children: [
+              if (accounts.isEmpty)
+                const ListTile(
+                  leading: Icon(Icons.person_off_outlined),
+                  title: Text('Aucun compte connecté'),
+                  subtitle: Text('Les abonnements locaux restent disponibles.'),
+                ),
+              for (final account in accounts)
+                ListTile(
+                  leading: const Icon(Icons.account_circle_outlined),
+                  title: Text('@${account.screenName}'),
+                  subtitle: Text(
+                    !TwitterAccount.hasAuthSession(account)
+                        ? 'Session incomplète : reconnecte-toi'
+                        : active?.id == account.id
+                            ? 'Compte actif · session enregistrée'
+                            : 'Compte enregistré',
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (active?.id != account.id)
+                        IconButton(
+                          tooltip: 'Utiliser @${account.screenName}',
+                          icon: const Icon(Icons.check_circle_outline),
+                          onPressed: () => _activate(ref, account),
+                        ),
+                      IconButton(
+                        tooltip: 'Déconnecter @${account.screenName}',
+                        icon: const Icon(Icons.logout, color: Colors.redAccent),
+                        onPressed: () => _disconnect(ref, account),
+                      ),
+                    ],
+                  ),
+                ),
+              ListTile(
+                leading: const Icon(Icons.login),
+                title: Text(accounts.isEmpty
+                    ? 'Se connecter à X'
+                    : 'Ajouter un compte X'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _connect(context, ref),
+              ),
+            ],
+          ),
+          loading: () => const ListTile(
+            title: Text('Chargement des comptes…'),
+            leading: CircularProgressIndicator(),
+          ),
+          error: (_, __) => const ListTile(
+            title: Text('Impossible de charger les comptes enregistrés'),
+            leading: Icon(Icons.error_outline),
+          ),
+        ),
+      ],
     );
   }
 }
