@@ -37,6 +37,12 @@ class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
 
     return Stack(
       children: [
+        // Shows the retrieval identity, not the video's author or CDN login.
+        Positioned(
+          top: widget.isFullscreen ? 12 : 78,
+          right: 12,
+          child: _buildRetrievalIndicator(),
+        ),
         // Text Overlay (Bottom)
         Positioned(
           bottom: bottomPadding,
@@ -72,6 +78,49 @@ class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
           child: _buildActionButtons(),
         ),
       ],
+    );
+  }
+
+  Widget _buildRetrievalIndicator() {
+    final via = widget.tweet.retrievedVia;
+    final isPublic = via == 'Public';
+    final unknown = via == null || via.isEmpty;
+    final label = isPublic
+        ? 'Public'
+        : unknown
+            ? 'Origine inconnue'
+            : via.startsWith('@')
+                ? via
+                : '@$via';
+    return Tooltip(
+      message: unknown
+          ? 'Vidéo en cache : compte utilisé non enregistré'
+          : isPublic
+              ? 'Vidéo récupérée sans compte X via une source publique'
+              : 'Vidéo récupérée avec la session X $label',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xD91B1E23),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white30),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isPublic ? Icons.public
+                  : unknown ? Icons.help_outline : Icons.account_circle_outlined,
+              size: 15,
+              color: const Color(0xFF70F0CE),
+            ),
+            const SizedBox(width: 5),
+            Text('Via $label', style: const TextStyle(
+              color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600,
+            )),
+          ],
+        ),
+      ),
     );
   }
 
