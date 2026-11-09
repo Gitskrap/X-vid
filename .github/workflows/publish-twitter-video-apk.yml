@@ -1,0 +1,41 @@
+name: Publier l'APK Twitter vidéo 0.16.0 (sans ZIP)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/publish-twitter-video-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  direct-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download successful 0.16.0 Android build
+        uses: actions/download-artifact@v4
+        with:
+          name: Twitter-video-Android-ARM64
+          run-id: 42650585358
+          github-token: ${{ github.token }}
+          path: dist
+
+      - name: Verify the APK file
+        run: |
+          test -s dist/Twitter-video-0.16.0-arm64.apk
+          ls -lh dist/Twitter-video-0.16.0-arm64.apk
+
+      - name: Publish APK as a direct GitHub Release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view v0.16.0 >/dev/null 2>&1; then
+            gh release create v0.16.0 \
+              --target master \
+              --title "Twitter vidéo 0.16.0" \
+              --notes "APK Android ARM64 signé. Téléchargement direct du .apk (pas de fichier ZIP)."
+          fi
+          gh release upload v0.16.0 dist/Twitter-video-0.16.0-arm64.apk --clobber
