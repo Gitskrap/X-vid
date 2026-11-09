@@ -31,6 +31,7 @@ jobs:
       - name: Publish APK as a direct GitHub Release asset
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: Gitskrap/X-vid
         run: |
           if ! gh release view v0.16.0 >/dev/null 2>&1; then
             gh release create v0.16.0 \
