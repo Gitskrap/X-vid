@@ -181,34 +181,49 @@ class UserMediaNotifier extends AsyncNotifier<FeedState> {
     String? cursor,
     required int cooldownMinutes,
   }) async {
-    if (TwitterAccount.currentAccount == null) {
-      return PublicXClient().userVideos(screenName, cursor: cursor);
-    }
-    Subscription? profile;
-    try {
-      profile = await client.fetchProfile(screenName);
-    } catch (e) {
-      debugPrint('XFLOW: Could not resolve @$screenName profile id: $e');
-    }
-
-    final userId = profile?.id;
-    if (userId != null && userId.isNotEmpty) {
+    // The authenticated user timeline can silently return zero tweets when
+    // an X GraphQL operation ID has expired. Try the search timeline and a
+    // public read-only source before showing an empty profile.
+    if (TwitterAccount.hasAuthSession(ref.read(accountProvider))) {
+      Subscription? profile;
       try {
-        return await client.fetchUserTimeline(
-          userId,
+        profile = await client.fetchProfile(screenName);
+      } catch (e) {
+        debugPrint('XFLOW: Could not resolve @$screenName profile id: $e');
+      }
+
+      final userId = profile?.id;
+      if (userId != null && userId.isNotEmpty) {
+        try {
+          final timeline = await client.fetchUserTimeline(
+            userId,
+            cursor: cursor,
+            cooldownMinutes: cooldownMinutes,
+          );
+          if (timeline.tweets.isNotEmpty) return timeline;
+        } catch (e) {
+          debugPrint('XFLOW: User timeline fetch failed: $e');
+        }
+      }
+
+      try {
+        final searched = await client.fetchUserTimelineByScreenName(
+          screenName,
           cursor: cursor,
           cooldownMinutes: cooldownMinutes,
         );
+        if (searched.tweets.isNotEmpty) return searched;
       } catch (e) {
-        debugPrint('XFLOW: User timeline fetch failed for $userId: $e');
+        debugPrint('XFLOW: X profile search fallback failed: $e');
       }
     }
-
-    return client.fetchUserTimelineByScreenName(
-      screenName,
-      cursor: cursor,
-      cooldownMinutes: cooldownMinutes,
-    );
+    // FxEmbed is for public posts only: it must not be given X cookies.
+    try {
+      return await PublicXClient().userVideos(screenName, cursor: cursor);
+    } catch (e) {
+      debugPrint('XFLOW: Public video fallback failed: $e');
+      rethrow;
+    }
   }
 }
 
