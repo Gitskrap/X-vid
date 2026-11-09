@@ -126,10 +126,12 @@ class UserMediaNotifier extends AsyncNotifier<FeedState> {
           state = AsyncData(state.value!.copyWith(isRefreshing: false));
         }
       }
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('XFLOW: Background user media fetch error: $e');
       if (!ref.mounted) return;
-      if (state.hasValue) {
+      if (state.hasValue && state.value!.tweets.isEmpty) {
+        state = AsyncError(e, st);
+      } else if (state.hasValue) {
         state = AsyncData(state.value!.copyWith(isRefreshing: false));
       }
     }
