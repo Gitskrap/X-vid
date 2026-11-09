@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/client/twitter_client.dart';
 import '../../core/client/twitter_account.dart';
 import '../../core/client/account_provider.dart';
+import '../../core/client/public_x_client.dart';
 import '../../core/models/tweet.dart';
 import '../../core/database/repository.dart';
 import '../../core/client/discovery_engine.dart';
@@ -44,6 +45,42 @@ class FeedState {
 }
 
 class FeedNotifier extends AsyncNotifier<FeedState> {
+  static int _publicSubscriptionOffset = 0;
+
+  /// Read-only fallback when X does not return videos for followed accounts.
+  /// FxEmbed never receives the user's X cookies or tokens.
+  Future<TweetResponse> _fetchPublicSubscriptions(int maxVideos) async {
+    final subscriptions = await Repository.getSubscriptions();
+    if (subscriptions.isEmpty) return TweetResponse(tweets: []);
+    final limit = subscriptions.length < 5 ? subscriptions.length : 5;
+    final selected = [
+      for (var i = 0; i < limit; i++)
+        subscriptions[(_publicSubscriptionOffset + i) % subscriptions.length]
+    ];
+    _publicSubscriptionOffset =
+        (_publicSubscriptionOffset + limit) % subscriptions.length;
+
+    final publicClient = PublicXClient();
+    final pages = await Future.wait(selected.map((sub) async {
+      try {
+        return await publicClient.userVideos(sub.screenName, count: 20);
+      } catch (error) {
+        AppLogger.log('Public videos unavailable for @${sub.screenName}: $error');
+        return TweetResponse(tweets: []);
+      }
+    }));
+    final unique = <String, Tweet>{};
+    for (final page in pages) {
+      for (final tweet in page.tweets) {
+        unique.putIfAbsent(tweet.id, () => tweet);
+      }
+    }
+    final videos = unique.values.toList()
+      ..sort((a, b) => (b.createdAt ?? DateTime(0))
+          .compareTo(a.createdAt ?? DateTime(0)));
+    return TweetResponse(tweets: videos.take(maxVideos).toList());
+  }
+
   // A bounded number of detailed X requests refreshes visible counters
   // without rate-limiting every vertical swipe.
   final Map<String, DateTime> _checkedEngagementAt = {};
@@ -266,7 +303,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
 
     try {
       // 1. Fetch from API
-      final TweetResponse freshResponse;
+      TweetResponse freshResponse;
       if (settings.fetchStrategy == FeedSort.videomixer) {
         freshResponse = await client.fetchVideoMixer(
           count: settings.timelineBatchSize,
@@ -294,6 +331,12 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
           useChunkedSubscriptions: settings.useChunkedSubscriptions,
           minFaves: settings.minFavesFilter,
         );
+      }
+
+      if (freshResponse.tweets.isEmpty) {
+        final publicResponse =
+            await _fetchPublicSubscriptions(settings.initialSyncCount);
+        if (publicResponse.tweets.isNotEmpty) freshResponse = publicResponse;
       }
 
       final freshPool = freshResponse.tweets;
@@ -382,6 +425,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
       List<Tweet> allNewTweets = [];
       String? currentCursor = state.value!.cursorBottom;
       final seenCursors = <String>{};
+      bool publicFallbackAttempted = false;
       int apiRetries = 0;
       int chunkRotations = 0;
       final maxRetries =
@@ -449,14 +493,26 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
             );
           }
 
-          final freshUnique = response.tweets.where((t) {
+          // Once per load-more action, try public videos when native X
+          // returns none. Do not loop on the public service indefinitely.
+          TweetResponse effectiveResponse = response;
+          if (response.tweets.isEmpty && !publicFallbackAttempted) {
+            publicFallbackAttempted = true;
+            final publicResponse =
+                await _fetchPublicSubscriptions(settings.loadBatchSize);
+            if (publicResponse.tweets.isNotEmpty) {
+              effectiveResponse = publicResponse;
+            }
+          }
+
+          final freshUnique = effectiveResponse.tweets.where((t) {
             if (!t.isVideo || t.mediaUrls.isEmpty) return false;
             return !seenIds.contains(t.id) &&
                 (t.mediaUrls.isEmpty || !seenMedia.contains(t.mediaUrls.first));
           }).toList();
 
-          if (response.tweets.isNotEmpty) {
-            await Repository.insertCachedMedia(response.tweets);
+          if (effectiveResponse.tweets.isNotEmpty) {
+            await Repository.insertCachedMedia(effectiveResponse.tweets);
           }
 
           allNewTweets.addAll(freshUnique);
