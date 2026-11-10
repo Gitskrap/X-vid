@@ -44,7 +44,6 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
   bool _hasMore = false;
   bool _usingPublicSearch = false;
   bool _poolScheduled = false;
-  final Set<String> _likePending = {};
 
   @override
   void dispose() {
@@ -201,71 +200,6 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
     });
   }
 
-  Future<void> _like(String id) async {
-    if (_likePending.contains(id)) return;
-    if (TwitterAccount.currentAccount == null) {
-      _notify('Connecte-toi à X pour aimer une vidéo.');
-      return;
-    }
-    var index = _results.indexWhere((tweet) => tweet.id == id);
-    if (index < 0) return;
-
-    _likePending.add(id);
-    try {
-      var current = _results[index];
-      if (!current.isLikedKnown) {
-        final detail =
-            await ref.read(twitterClientProvider).fetchTweetDetail(id);
-        if (!mounted) return;
-        final verified =
-            detail.tweets.where((tweet) => tweet.id == id).firstOrNull;
-        if (verified == null || !verified.isLikedKnown) {
-          _notify('X ne permet pas de vérifier le statut du like.');
-          return;
-        }
-        current = current.copyWith(
-          isLiked: verified.isLiked,
-          isLikedKnown: true,
-          favoriteCount: verified.favoriteCountKnown
-              ? verified.favoriteCount
-              : current.favoriteCount,
-          favoriteCountKnown:
-              current.favoriteCountKnown || verified.favoriteCountKnown,
-        );
-      }
-
-      index = _results.indexWhere((tweet) => tweet.id == id);
-      if (index < 0 || !mounted) return;
-      final initial = current;
-      final newIsLiked = !initial.isLiked;
-      final calculatedCount = initial.favoriteCount + (newIsLiked ? 1 : -1);
-      final pending = initial.copyWith(
-        isLiked: newIsLiked,
-        isLikedKnown: true,
-        favoriteCount: calculatedCount < 0 ? 0 : calculatedCount,
-      );
-
-      setState(() => _results[index] = pending);
-      final client = ref.read(twitterClientProvider);
-      final success = newIsLiked
-          ? await client.favoriteTweet(id)
-          : await client.unfavoriteTweet(id);
-      if (!mounted) return;
-      final updatedIndex = _results.indexWhere((tweet) => tweet.id == id);
-      if (updatedIndex < 0) return;
-      if (!success) {
-        setState(() => _results[updatedIndex] = initial);
-        _notify('X a refusé la modification du like.');
-      } else {
-        unawaited(Repository.insertCachedMedia([pending]));
-      }
-    } catch (error) {
-      _notify('Impossible de modifier le like : $error');
-    } finally {
-      _likePending.remove(id);
-    }
-  }
-
   void _notify(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -313,7 +247,6 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
                   key: ValueKey(_results[index].id),
                   tweet: _results[index],
                   isVisible: index == _index,
-                  onLike: _like,
                 ),
               ),
             )

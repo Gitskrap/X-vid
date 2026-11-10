@@ -932,48 +932,6 @@ class TwitterClient {
     );
   }
 
-  Future<bool> favoriteTweet(String tweetId) async {
-    final uri = Uri.https('x.com', '/i/api$graphqlFavoriteTweetUriPath');
-    final variables = {"tweet_id": tweetId};
-
-    try {
-      AppLogger.log('Favoriting tweet: $tweetId');
-      await _waitForTurn();
-      final response = await TwitterAccount.fetch(uri,
-          method: 'POST',
-          body: jsonEncode(
-              {"variables": variables, "queryId": "lI07N6Otwv1PhnEgXILM7A"}));
-
-      return response.statusCode == 200;
-    } catch (e) {
-      AppLogger.log('Error favoriting tweet: $e');
-      return false;
-    } finally {
-      _releaseTurn();
-    }
-  }
-
-  Future<bool> unfavoriteTweet(String tweetId) async {
-    final uri = Uri.https('x.com', '/i/api$graphqlUnfavoriteTweetUriPath');
-    final variables = {"tweet_id": tweetId};
-
-    try {
-      AppLogger.log('Unfavoriting tweet: $tweetId');
-      await _waitForTurn();
-      final response = await TwitterAccount.fetch(uri,
-          method: 'POST',
-          body: jsonEncode(
-              {"variables": variables, "queryId": "ZYKSe-w7KEslx3JhSIk5LA"}));
-
-      return response.statusCode == 200;
-    } catch (e) {
-      AppLogger.log('Error unfavoriting tweet: $e');
-      return false;
-    } finally {
-      _releaseTurn();
-    }
-  }
-
   Future<TweetResponse> fetchTweetDetail(String focalTweetId,
       {String? cursor}) async {
     final variables = {

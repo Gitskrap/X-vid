@@ -12,7 +12,7 @@ import '../../../core/utils/app_logger.dart';
 import '../../feed/widgets/text_tweet_card.dart';
 import '../player_pool_provider.dart';
 import '../../settings/settings_provider.dart';
-import '../../feed/feed_provider.dart';
+import '../../feed/local_video_reactions_provider.dart';
 import '../video_ui_provider.dart';
 import 'video_seek_bar.dart';
 
@@ -332,30 +332,43 @@ class _TiktokMediaContainerState extends ConsumerState<TiktokMediaContainer> {
                                     children: [
                                       const MaterialPositionIndicator(),
                                       const Spacer(),
-                                      // Like Button
+                                      // Private like: never sends X API calls.
                                       MaterialCustomButton(
-                                        onPressed: () {
-                                          ref
-                                              .read(
-                                                  feedNotifierProvider.notifier)
-                                              .toggleLike(widget.tweet.id);
-                                        },
+                                        onPressed: () => unawaited(
+                                          ref.read(localVideoReactionsProvider.notifier)
+                                              .toggle(widget.tweet, 1)),
                                         icon: Consumer(
                                           builder: (context, ref, child) {
-                                            final isLiked = ref.watch(
-                                                feedNotifierProvider.select(
-                                                    (s) => s.value?.tweets
-                                                        .firstWhere((t) =>
-                                                            t.id ==
-                                                            widget.tweet.id)
-                                                        .isLiked ??
-                                                    false));
+                                            final value = ref.watch(
+                                              localVideoReactionsProvider)
+                                                .value?[widget.tweet.id]?.value ?? 0;
                                             return Icon(
-                                              isLiked
+                                              value == 1
                                                   ? Icons.favorite
                                                   : Icons.favorite_border,
-                                              color: isLiked
-                                                  ? Colors.red
+                                              color: value == 1
+                                                  ? const Color(0xFFFF637E)
+                                                  : Colors.white,
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                      // Private dislike, available in fullscreen.
+                                      MaterialCustomButton(
+                                        onPressed: () => unawaited(
+                                          ref.read(localVideoReactionsProvider.notifier)
+                                              .toggle(widget.tweet, -1)),
+                                        icon: Consumer(
+                                          builder: (context, ref, child) {
+                                            final value = ref.watch(
+                                              localVideoReactionsProvider)
+                                                .value?[widget.tweet.id]?.value ?? 0;
+                                            return Icon(
+                                              value == -1
+                                                  ? Icons.thumb_down
+                                                  : Icons.thumb_down_outlined,
+                                              color: value == -1
+                                                  ? const Color(0xFFFFB47E)
                                                   : Colors.white,
                                             );
                                           },
