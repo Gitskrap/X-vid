@@ -116,9 +116,14 @@ class PublicXClient {
       if (videos is! List) continue;
       final variants = <(int, String)>[];
       String? thumbnail;
+      int? durationMs;
       for (final entry in videos) {
         if (entry is! Map) continue;
         thumbnail ??= entry['thumbnail_url']?.toString();
+        // FxEmbed's public payload may provide a millisecond duration.
+        // Unknown values are validated with the actual media player later.
+        final rawMs = entry['duration_millis'] ?? entry['duration_ms'];
+        if (rawMs is num && rawMs > 0) durationMs = rawMs.toInt();
         final formats = entry['formats'];
         if (formats is List) {
           for (final format in formats) {
@@ -157,6 +162,7 @@ class PublicXClient {
         mediaUrls: urls,
         thumbnailUrl: thumbnail,
         isVideo: true,
+        durationMs: durationMs,
         createdAt: when is num && when > 0
             ? DateTime.fromMillisecondsSinceEpoch(
                 (when * 1000).toInt(), isUtc: true).toLocal()

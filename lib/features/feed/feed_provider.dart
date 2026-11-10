@@ -33,7 +33,10 @@ class FeedState {
     this.isLoadingMore = false,
     this.isRefreshing = false,
   }) : tweets = List<Tweet>.unmodifiable(
-          tweets.where((tweet) => tweet.isVideo && tweet.mediaUrls.isNotEmpty),
+          tweets.where((tweet) => tweet.isVideo &&
+              tweet.mediaUrls.isNotEmpty &&
+              // Missing durations are verified before rendering the video.
+              (tweet.durationMs == null || tweet.durationMs! > 15000)),
         );
 
   FeedState copyWith({
@@ -97,13 +100,17 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
     Map<String, LocalVideoReaction> reactions,
     Iterable<String> followedHashtags,
   ) async {
-    // Locally followed hashtags are explicit interests alongside subscriptions
-    // and likes. Dislikes prevent searching rejected themes.
+    // All four sources influence recommendations: explicit likes, videos
+    // meaningfully watched, followed hashtags, and locally saved creators.
+    // Watch history remains on-device; X only receives keyword searches.
+    final watched = await Repository.getMeaningfullyWatchedVideos();
+    if (!ref.mounted) return const [];
     final topics = personalizedVideoTopics(
       examples,
       reactions,
-      limit: 3,
+      limit: 4,
       followedHashtags: followedHashtags,
+      watchedVideos: watched,
     );
     if (topics.isEmpty) return const [];
     final found = <String, Tweet>{};
@@ -136,6 +143,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
       for (final video in result.tweets) {
         final author = video.userHandle.replaceFirst('@', '').toLowerCase();
         if (!video.isVideo || video.mediaUrls.isEmpty ||
+            (video.durationMs != null && video.durationMs! <= 15000) ||
             localHandles.contains(author) ||
             excludedByFeedback(video, reactions)) continue;
         found.putIfAbsent(video.id,
@@ -318,10 +326,8 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
       return FeedState(tweets: [], isRefreshing: true);
     }
     final allowedHandles = localVideoHandles(subscriptions.allSubscriptions);
-    if (allowedHandles.isEmpty) {
-      return FeedState(tweets: [], isRefreshing: false);
-    }
-
+    // A user with likes, hashtags or watched videos can discover videos even
+    // before following any creators. Empty subscription sets skip API sync.
     debugPrint(
         'XFLOW: Building FeedNotifier. fetchStrategy: ${settings.fetchStrategy}');
 
@@ -385,34 +391,31 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
         ref.read(hashtagListProvider).value ?? const <String>[];
     final allowedHandles = localVideoHandles(
         ref.read(subscriptionListProvider).allSubscriptions);
-    if (allowedHandles.isEmpty) {
-      if (ref.mounted && state.hasValue) {
-        state = AsyncData(FeedState(tweets: [], isRefreshing: false));
-      }
-      return;
-    }
-
+    // Recommendations can be derived from local likes, watch history and
+    // hashtags even when the local subscription list is empty.
     debugPrint('XFLOW: Background refresh started');
 
     try {
       // 1. Fetch from API
       // Do not use For You, Following or global trending as home sources.
       // Only author handles explicitly saved inside Twitter vidéo qualify.
-      TweetResponse freshResponse = await client.fetchSubscribedMedia(
-        sort: settings.fetchStrategy == FeedSort.popular
-            ? FeedSort.popular
-            : FeedSort.latest,
-        filters: const {MediaFilter.video},
-        subBatchSize: settings.syncBatchSize,
-        loadBatchSize: settings.initialSyncCount,
-        cooldownMinutes: settings.cooldownDuration,
-        strictSubscriptionsOnly: true,
-        includeNativeRetweets: false,
-        useChunkedSubscriptions: settings.useChunkedSubscriptions,
-        minFaves: settings.minFavesFilter,
-      );
+      TweetResponse freshResponse = allowedHandles.isEmpty
+          ? TweetResponse(tweets: [])
+          : await client.fetchSubscribedMedia(
+              sort: settings.fetchStrategy == FeedSort.popular
+                  ? FeedSort.popular
+                  : FeedSort.latest,
+              filters: const {MediaFilter.video},
+              subBatchSize: settings.syncBatchSize,
+              loadBatchSize: settings.initialSyncCount,
+              cooldownMinutes: settings.cooldownDuration,
+              strictSubscriptionsOnly: true,
+              includeNativeRetweets: false,
+              useChunkedSubscriptions: settings.useChunkedSubscriptions,
+              minFaves: settings.minFavesFilter,
+            );
 
-      if (freshResponse.tweets.isEmpty) {
+      if (allowedHandles.isNotEmpty && freshResponse.tweets.isEmpty) {
         final publicResponse =
             await _fetchPublicSubscriptions(settings.initialSyncCount);
         if (publicResponse.tweets.isNotEmpty) freshResponse = publicResponse;
@@ -501,7 +504,21 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
     final allowedHandles = localVideoHandles(
         ref.read(subscriptionListProvider).allSubscriptions);
     if (allowedHandles.isEmpty) {
-      state = AsyncData(FeedState(tweets: [], isRefreshing: false));
+      // Discover from likes, watched videos or hashtags without requiring
+      // subscriptions. Preserve existing suggestions and avoid duplicates.
+      state = AsyncData(currentState.copyWith(isLoadingMore: true));
+      final suggestions = settings.suggestSimilarVideos
+          ? await _fetchRelatedVideos(const [], allowedHandles,
+              ref.read(twitterClientProvider), reactions, followedHashtags)
+          : <Tweet>[];
+      if (!ref.mounted) return;
+      final seen = currentState.tweets.map((t) => t.id).toSet();
+      final additional = filterByFeedback(
+          suggestions.where((video) => seen.add(video.id)), reactions);
+      state = AsyncData(currentState.copyWith(
+        tweets: [...currentState.tweets, ...additional],
+        isLoadingMore: false,
+      ));
       return;
     }
 

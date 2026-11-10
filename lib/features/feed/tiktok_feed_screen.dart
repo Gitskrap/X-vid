@@ -268,6 +268,7 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
               itemBuilder: (context, index) {
                 final settings = ref.read(settingsProvider);
                 return TiktokFeedItem(
+                  requireLongVideo: true,
                   tweet: tweets[index],
                   isVisible: index == _currentIndex && isScreenActive,
                   onPlaybackError: () {
@@ -315,8 +316,11 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
           children: [
             Text(
               emptyList
-                  ? 'Ajoute des comptes dans Abonnements pour remplir ton fil.'
-                  : 'Aucune vidéo disponible parmi tes abonnements locaux.',
+                  ? 'Ajoute des hashtags, aime des vidéos ou suis des comptes '
+                       'pour personnaliser ton fil. Seules les vidéos de '
+                       'plus de 15 secondes apparaissent.'
+                  : 'Aucune vidéo de plus de 15 secondes disponible '
+                       'pour tes centres d’intérêt.',
               textAlign: TextAlign.center,
               style: const TextStyle(color: Colors.white70),
             ),
@@ -369,6 +373,7 @@ class TiktokFeedItem extends ConsumerWidget {
   final Tweet tweet;
   final bool isVisible;
   final bool autoFullscreen;
+  final bool requireLongVideo;
   final VoidCallback? onPlaybackError;
 
   const TiktokFeedItem({
@@ -376,6 +381,7 @@ class TiktokFeedItem extends ConsumerWidget {
     required this.tweet,
     required this.isVisible,
     this.autoFullscreen = false,
+    this.requireLongVideo = false,
     this.onPlaybackError,
   });
 
@@ -392,6 +398,7 @@ class TiktokFeedItem extends ConsumerWidget {
             tweet: tweet,
             isVisible: isVisible && castedTweetId != tweet.id,
             autoFullscreen: autoFullscreen,
+            requireLongVideo: requireLongVideo,
             overlayBuilder: (context, onFullscreen, isFullscreen) =>
                 TweetTextOverlay(
               tweet: tweet,

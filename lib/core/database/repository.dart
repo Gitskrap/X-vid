@@ -32,7 +32,7 @@ class Repository {
     }
     return await openDatabase(
       path,
-      version: 12,
+      version: 13,
       onCreate: (db, version) async {
         await db.execute(
           'CREATE TABLE $tableAccounts (id TEXT PRIMARY KEY, screen_name TEXT, rest_id TEXT, auth_header TEXT)',
@@ -61,7 +61,8 @@ class Repository {
             last_played_at INTEGER,
             duration_watched INTEGER DEFAULT 0,
             last_suggested_at INTEGER,
-            retrieved_via TEXT
+            retrieved_via TEXT,
+            duration_ms INTEGER
           )
         ''');
         await db.execute(
@@ -163,6 +164,10 @@ class Repository {
               updated_at INTEGER NOT NULL
             )
           ''');
+        }
+        if (oldVersion < 13) {
+          await db.execute(
+              'ALTER TABLE $tableCachedMedia ADD COLUMN duration_ms INTEGER');
         }
       },
     );
@@ -304,6 +309,7 @@ class Repository {
           'media_urls': jsonEncode(tweet.mediaUrls),
           'thumbnail_url': tweet.thumbnailUrl,
           'retrieved_via': tweet.retrievedVia,
+          'duration_ms': tweet.durationMs,
           'is_video': tweet.isVideo ? 1 : 0,
           'created_at': tweet.createdAt?.millisecondsSinceEpoch,
           'favorite_count': tweet.favoriteCountKnown ? tweet.favoriteCount : null,
@@ -317,6 +323,9 @@ class Repository {
       final updates = <String, Object?>{};
       if (tweet.retrievedVia != null) {
         updates['retrieved_via'] = tweet.retrievedVia;
+      }
+      if (tweet.durationMs != null && tweet.durationMs! > 0) {
+        updates['duration_ms'] = tweet.durationMs;
       }
       if (tweet.favoriteCountKnown) {
         updates['favorite_count'] = tweet.favoriteCount;
@@ -349,6 +358,9 @@ class Repository {
 
     // Use a subquery to exclude any tweets whose media_key has been played elsewhere
     String whereClause = 'played_count = 0';
+    if (allowedHandles != null) {
+      whereClause += ' AND (duration_ms IS NULL OR duration_ms > 15000)';
+    }
     whereClause +=
         ' AND (media_key IS NULL OR media_key NOT IN (SELECT media_key FROM $tableCachedMedia WHERE played_count > 0 AND media_key IS NOT NULL))';
 
@@ -400,6 +412,7 @@ class Repository {
             List<String>.from(jsonDecode(maps[i]['media_urls'] as String)),
         thumbnailUrl: maps[i]['thumbnail_url'] as String?,
         retrievedVia: maps[i]['retrieved_via'] as String?,
+        durationMs: maps[i]['duration_ms'] as int?,
         isVideo: (maps[i]['is_video'] as int) == 1,
         favoriteCount: (maps[i]['favorite_count'] as int?) ?? 0,
         replyCount: (maps[i]['reply_count'] as int?) ?? 0,
@@ -466,6 +479,12 @@ class Repository {
       }
     }
 
+    // Only the home feed supplies allowedHandles; leave other views intact.
+    if (allowedHandles != null) {
+      whereClause = whereClause == null
+          ? '(duration_ms IS NULL OR duration_ms > 15000)'
+          : '$whereClause AND (duration_ms IS NULL OR duration_ms > 15000)';
+    }
     final List<Map<String, dynamic>> maps = await db.query(
       tableCachedMedia,
       where: whereClause,
@@ -485,6 +504,7 @@ class Repository {
             List<String>.from(jsonDecode(maps[i]['media_urls'] as String)),
         thumbnailUrl: maps[i]['thumbnail_url'] as String?,
         retrievedVia: maps[i]['retrieved_via'] as String?,
+        durationMs: maps[i]['duration_ms'] as int?,
         isVideo: (maps[i]['is_video'] as int) == 1,
         favoriteCount: (maps[i]['favorite_count'] as int?) ?? 0,
         replyCount: (maps[i]['reply_count'] as int?) ?? 0,
@@ -589,6 +609,7 @@ class Repository {
             List<String>.from(jsonDecode(maps[i]['media_urls'] as String)),
         thumbnailUrl: maps[i]['thumbnail_url'] as String?,
         retrievedVia: maps[i]['retrieved_via'] as String?,
+        durationMs: maps[i]['duration_ms'] as int?,
         isVideo: (maps[i]['is_video'] as int) == 1,
         favoriteCount: (maps[i]['favorite_count'] as int?) ?? 0,
         replyCount: (maps[i]['reply_count'] as int?) ?? 0,
@@ -649,6 +670,7 @@ class Repository {
             List<String>.from(jsonDecode(maps[i]['media_urls'] as String)),
         thumbnailUrl: maps[i]['thumbnail_url'] as String?,
         retrievedVia: maps[i]['retrieved_via'] as String?,
+        durationMs: maps[i]['duration_ms'] as int?,
         isVideo: (maps[i]['is_video'] as int) == 1,
         favoriteCount: (maps[i]['favorite_count'] as int?) ?? 0,
         replyCount: (maps[i]['reply_count'] as int?) ?? 0,
@@ -661,6 +683,56 @@ class Repository {
             : null,
       );
     });
+  }
+
+  /// Record meaningful playback rather than counting a quick scroll past.
+  /// Watch time is local, never sent to X or a recommendation service.
+  static Future<void> recordMeaningfulVideoWatch(
+      Tweet video, {int watchedSeconds = 7}) async {
+    if (!video.isVideo || watchedSeconds < 7) return;
+    await insertCachedMedia([video]);
+    final db = await database;
+    await db.rawUpdate('''
+      UPDATE $tableCachedMedia
+      SET duration_watched = COALESCE(duration_watched, 0) + ?,
+          last_played_at = ?
+      WHERE id = ?
+    ''', [watchedSeconds, DateTime.now().millisecondsSinceEpoch, video.id]);
+  }
+
+  /// Recent meaningful watch history is used as a private topic signal.
+  static Future<List<Tweet>> getMeaningfullyWatchedVideos(
+      {int limit = 40}) async {
+    final db = await database;
+    final rows = await db.query(
+      tableCachedMedia,
+      columns: ['id', 'text', 'user_handle', 'media_urls', 'duration_ms'],
+      where: 'is_video = 1 AND duration_watched >= 7 '
+          'AND (duration_ms IS NULL OR duration_ms > 15000)',
+      orderBy: 'last_played_at DESC, created_at DESC',
+      limit: limit,
+    );
+    return [
+      for (final row in rows)
+        Tweet(
+          id: row['id'] as String,
+          text: (row['text'] as String?) ?? '',
+          userHandle: (row['user_handle'] as String?) ?? '',
+          mediaUrls: List<String>.from(
+              jsonDecode((row['media_urls'] as String?) ?? '[]')),
+          durationMs: row['duration_ms'] as int?,
+          isVideo: true,
+        ),
+    ];
+  }
+
+  /// Persist a duration resolved by media_kit for old cached/public videos.
+  static Future<void> saveResolvedVideoDuration(
+      String id, int durationMs) async {
+    if (durationMs <= 0) return;
+    final db = await database;
+    await db.update(tableCachedMedia, {'duration_ms': durationMs},
+        where: 'id = ?', whereArgs: [id]);
   }
 
   static Future<void> markMediaAsPlayed(String id) async {

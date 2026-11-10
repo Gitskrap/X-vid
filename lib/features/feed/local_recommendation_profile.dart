@@ -70,11 +70,24 @@ List<String> personalizedVideoTopics(
   Map<String, LocalVideoReaction> reactions, {
   int limit = 3,
   Iterable<String> followedHashtags = const <String>[],
+  Iterable<Tweet> watchedVideos = const <Tweet>[],
 }) {
   final scores = <String, int>{};
   for (final topic in topicsFromSubscribedVideos(savedSubscriptionVideos,
       limit: 8)) {
     scores[topic] = (scores[topic] ?? 0) + 2;
+  }
+
+  // Videos actually watched for several seconds are evidence of interest,
+  // not just an incidental swipe. They are softer signals than explicit likes.
+  for (final video in watchedVideos) {
+    if (!video.isVideo || video.text.trim().isEmpty) continue;
+    for (final tag in captionHashtags(video.text)) {
+      scores[tag] = (scores[tag] ?? 0) + 4;
+    }
+    for (final word in captionKeywords(video.text)) {
+      scores[word] = (scores[word] ?? 0) + 1;
+    }
   }
 
   // Explicitly followed hashtags are stronger than passive subscriptions.

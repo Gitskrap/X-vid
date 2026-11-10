@@ -1353,6 +1353,7 @@ class TwitterClient {
       String? thumbnailUrl;
       String? mediaKey;
       bool isVideo = false;
+      int? durationMs;
 
       if (allMedia.isNotEmpty && allMedia.first['media_url_https'] != null) {
         thumbnailUrl = allMedia.first['media_url_https'];
@@ -1362,6 +1363,12 @@ class TwitterClient {
       for (final m in allMedia) {
         if (m['type'] == 'video' || m['type'] == 'animated_gif') {
           isVideo = true;
+          // X returns duration_millis for native videos. Animated GIFs
+          // are not treated as long-form clips without verification.
+          final rawDuration = m['video_info']?['duration_millis'];
+          if (rawDuration is num && rawDuration > 0) {
+            durationMs = rawDuration.toInt();
+          }
           final variants = List.from(m['video_info']?['variants'] ?? []);
           if (variants.isEmpty) continue;
 
@@ -1421,6 +1428,7 @@ class TwitterClient {
         mediaUrls: mediaUrls,
         thumbnailUrl: thumbnailUrl,
         isVideo: isVideo,
+        durationMs: durationMs,
         createdAt: createdAt,
         isLiked: isLiked == true,
         favoriteCount: rawFavoriteCount ?? 0,

@@ -51,9 +51,11 @@ void main() {
     expect(mixed.take(3).every((t) => t.userHandle == '@saved'), isTrue);
   });
 
-  test('duplicates and empty subscriptions never force suggestions', () {
+  test('duplicates suppressed; interests can suggest without subscriptions', () {
     final saved = [clip('7', '#babyfoot')];
     expect(mixRelatedVideos(saved, [saved.single]), saved);
-    expect(mixRelatedVideos([], [clip('8', '#babyfoot')]), isEmpty);
+    final discovered = mixRelatedVideos([], [clip('8', '#babyfoot')]);
+    expect(discovered.map((t) => t.id), ['8']);
+    expect(discovered.first.source, 'Découverte');
   });
 }

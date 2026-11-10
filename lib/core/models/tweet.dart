@@ -9,6 +9,8 @@ class Tweet {
   final List<String> mediaUrls;
   final String? thumbnailUrl;
   final bool isVideo;
+  /// Duration from X or the local player, in milliseconds. Null is unverified.
+  final int? durationMs;
   final DateTime? createdAt;
   final String? source; // "API" or "Cache" or other metadata
   /// X account used to fetch metadata, "Public" for anonymous requests.
@@ -31,6 +33,7 @@ class Tweet {
     required this.mediaUrls,
     this.thumbnailUrl,
     this.isVideo = false,
+    this.durationMs,
     DateTime? createdAt,
     this.source,
     this.retrievedVia,
@@ -56,6 +59,7 @@ class Tweet {
     List<String>? mediaUrls,
     String? thumbnailUrl,
     bool? isVideo,
+    int? durationMs,
     DateTime? createdAt,
     String? source,
     String? retrievedVia,
@@ -75,6 +79,7 @@ class Tweet {
       mediaUrls: mediaUrls ?? this.mediaUrls,
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       isVideo: isVideo ?? this.isVideo,
+      durationMs: durationMs ?? this.durationMs,
       createdAt: createdAt ?? this.createdAt,
       source: source ?? this.source,
       retrievedVia: retrievedVia ?? this.retrievedVia,
