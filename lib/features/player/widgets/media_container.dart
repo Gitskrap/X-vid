@@ -14,6 +14,7 @@ import '../../feed/widgets/text_tweet_card.dart';
 import '../player_pool_provider.dart';
 import '../../settings/settings_provider.dart';
 import '../../feed/local_video_reactions_provider.dart';
+import '../../feed/persistent_fullscreen_provider.dart';
 import '../video_ui_provider.dart';
 import 'video_seek_bar.dart';
 
@@ -27,6 +28,7 @@ class TiktokMediaContainer extends ConsumerStatefulWidget {
           BuildContext context, VoidCallback? onFullscreen, bool isFullscreen)?
       overlayBuilder;
   final VoidCallback? onPlaybackError;
+  final VoidCallback? onDislike;
 
   const TiktokMediaContainer({
     super.key,
@@ -36,6 +38,7 @@ class TiktokMediaContainer extends ConsumerStatefulWidget {
     this.requireLongVideo = false,
     this.overlayBuilder,
     this.onPlaybackError,
+    this.onDislike,
   });
 
   @override
@@ -344,6 +347,12 @@ class _TiktokMediaContainerState extends ConsumerState<TiktokMediaContainer> {
 
           // Determine orientation based on current player state
           Future<void> onFullscreen() async {
+            if (widget.requireLongVideo) {
+              // The feed owns fullscreen. A media_kit per-video fullscreen
+              // route is destroyed on a vertical swipe.
+              ref.read(persistentFullscreenProvider.notifier).toggle();
+              return;
+            }
             final state = _videoKey.currentState;
             if (state != null) {
               try {
@@ -470,11 +479,18 @@ class _TiktokMediaContainerState extends ConsumerState<TiktokMediaContainer> {
                                           },
                                         ),
                                       ),
-                                      // Private dislike, available in fullscreen.
+                                      // Private dislike: hide and advance
+                                      // immediately, including in fullscreen.
                                       MaterialCustomButton(
-                                        onPressed: () => unawaited(
-                                          ref.read(localVideoReactionsProvider.notifier)
-                                              .toggle(widget.tweet, -1)),
+                                        onPressed: () {
+                                          unawaited(ref.read(
+                                              localVideoReactionsProvider.notifier)
+                                              .reject(widget.tweet)
+                                              .catchError((Object error) {
+                                            debugPrint('Dislike save failed: $error');
+                                          }));
+                                          widget.onDislike?.call();
+                                        },
                                         icon: Consumer(
                                           builder: (context, ref, child) {
                                             final value = ref.watch(
