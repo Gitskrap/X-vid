@@ -12,6 +12,7 @@ import '../auth/login_screen.dart';
 import '../../core/client/account_provider.dart';
 import '../../core/navigation/navigation_provider.dart';
 import 'widgets/tweet_text_overlay.dart';
+import 'widgets/active_session_chip.dart';
 import '../cast/cast_video_button.dart';
 import '../subscriptions/subscription_list_screen.dart';
 import 'local_video_filter.dart';
@@ -149,23 +150,18 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 10, 12, 0),
                 child: Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
-                      decoration: BoxDecoration(
-                        color: const Color(0xB814161A),
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: Colors.white24),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.play_circle_fill_rounded, color: Color(0xFF70F0CE), size: 20),
-                          SizedBox(width: 8),
-                          Text('Twitter vidéo', style: TextStyle(fontWeight: FontWeight.w700, letterSpacing: 0.2)),
-                        ],
+                    // The selected X account replaces the application logo.
+                    // Constrain it to the available space so the search,
+                    // refresh and settings controls always remain reachable.
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: ActiveSessionChip(
+                          screenName: account?.screenName,
+                        ),
                       ),
                     ),
-                    const Spacer(),
+                    const SizedBox(width: 6),
                     IconButton(
                       tooltip: 'Rechercher des vidéos',
                       onPressed: () => ref.read(navigationProvider.notifier).openVideoSearch(),
