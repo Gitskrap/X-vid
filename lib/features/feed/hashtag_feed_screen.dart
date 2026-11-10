@@ -76,8 +76,12 @@ class HashtagListScreen extends ConsumerWidget {
                   children: [
                     const Icon(Icons.tag, size: 64, color: Colors.white24),
                     const SizedBox(height: 16),
-                    const Text('No hashtags added yet',
-                        style: TextStyle(color: Colors.white70)),
+                    const Text(
+                      'Ajoute des hashtags pour orienter les recommandations '
+                      'de l’onglet Vidéos.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white70),
+                    ),
                     const SizedBox(height: 16),
                     ElevatedButton(
                       onPressed: () => _showAddHashtagDialog(context, ref),
