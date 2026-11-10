@@ -341,9 +341,23 @@ class _HashtagMediaFeedScreenState
             (tweet) => reactions?[tweet.id]?.value != -1,
           ).toList();
           if (tweets.isEmpty) {
-            return const Center(
-                child: Text('No media found',
-                    style: TextStyle(color: Colors.white70)));
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Aucune vidéo trouvée pour ce hashtag.',
+                    style: TextStyle(color: Colors.white70)),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: () => ref
+                      .read(hashtagMediaProvider(widget.hashtag).notifier)
+                      .refresh(),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Rechercher à nouveau'),
+                  ),
+                ],
+              ),
+            );
           }
 
           _managePool();
