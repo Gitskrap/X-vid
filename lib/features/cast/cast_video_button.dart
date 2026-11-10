@@ -147,7 +147,8 @@ class ActiveCastTweetNotifier extends Notifier<String?> {
           _currentMediaSessionId = status.mediaSessionID;
           return;
         }
-        if (status.idleReason?.name.toLowerCase() != 'finished') return;
+        if (status.playerState.name.toLowerCase() != 'idle' ||
+            status.idleReason?.name.toLowerCase() != 'finished') return;
         if (_currentMediaSessionId != null &&
             status.mediaSessionID != _currentMediaSessionId) return;
         _advancing = true;
