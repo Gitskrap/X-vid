@@ -99,6 +99,12 @@ class MainScaffold extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final nav = ref.watch(navigationProvider);
+    ref.listen(navigationProvider, (previous, next) {
+      if (previous?.currentTab == MainTab.media &&
+          next.currentTab != MainTab.media) {
+        ref.read(persistentFullscreenProvider.notifier).setActive(false);
+      }
+    });
     final videoUiHidden = ref.watch(videoUiHiddenProvider);
     final persistentFullscreen = ref.watch(persistentFullscreenProvider);
     final landscape = MediaQuery.orientationOf(context) == Orientation.landscape;
@@ -151,9 +157,13 @@ class MainScaffold extends ConsumerWidget {
     );
 
     return PopScope(
-      canPop: !nav.isVideoSearchOpen && nav.selectedUser == null && nav.selectedHashtag == null,
+      canPop: !persistentFullscreen && !nav.isVideoSearchOpen &&
+          nav.selectedUser == null && nav.selectedHashtag == null,
       onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) {
+        if (didPop) return;
+        if (persistentFullscreen) {
+          ref.read(persistentFullscreenProvider.notifier).setActive(false);
+        } else {
           navNotifier.back();
         }
       },
