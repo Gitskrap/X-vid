@@ -14,6 +14,7 @@ import '../player_pool_provider.dart';
 import '../../settings/settings_provider.dart';
 import '../../feed/feed_provider.dart';
 import '../video_ui_provider.dart';
+import 'video_seek_bar.dart';
 
 class TiktokMediaContainer extends ConsumerStatefulWidget {
   final Tweet tweet;
@@ -423,45 +424,19 @@ class _TiktokMediaContainerState extends ConsumerState<TiktokMediaContainer> {
                   ),
                 ),
               ),
-              // The video-only mode also hides the progress indicator.
-              if (!videoUiHidden)
+              // A visible, interactive timeline sits above Android's
+              // gesture-navigation inset and takes horizontal drag gestures.
+              if (!videoUiHidden && widget.isVisible)
                 Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: IgnorePointer(
-                  child: _buildProgressBar(instance),
+                  bottom: MediaQuery.paddingOf(context).bottom + 6,
+                  left: 9,
+                  right: 9,
+                  child: VideoSeekBar(player: instance.player),
                 ),
-              ),
             ],
           );
         },
       ),
-    );
-  }
-
-  Widget _buildProgressBar(PlayerInstance instance) {
-    return StreamBuilder<Duration>(
-      stream: instance.player.stream.position,
-      builder: (context, snapshot) {
-        final position = snapshot.data ?? Duration.zero;
-        final duration = instance.player.state.duration;
-
-        if (duration == Duration.zero) return const SizedBox.shrink();
-
-        final progress = position.inMilliseconds / duration.inMilliseconds;
-
-        return Container(
-          height: 2,
-          width: double.infinity,
-          color: Colors.white12,
-          child: FractionallySizedBox(
-            alignment: Alignment.centerLeft,
-            widthFactor: progress.clamp(0.0, 1.0),
-            child: Container(color: Colors.white),
-          ),
-        );
-      },
     );
   }
 
