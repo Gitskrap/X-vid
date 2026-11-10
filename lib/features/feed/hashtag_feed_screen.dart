@@ -97,6 +97,7 @@ class HashtagListScreen extends ConsumerWidget {
                   return ListTile(
                     leading: const Icon(Icons.tag, color: Colors.blue),
                     title: Text(tag, style: const TextStyle(fontSize: 16)),
+                    subtitle: const Text('Influence les suggestions de vidéos'),
                     trailing: IconButton(
                       icon: const Icon(Icons.delete_outline, size: 20),
                       onPressed: () => _confirmDelete(context, ref, tag),
