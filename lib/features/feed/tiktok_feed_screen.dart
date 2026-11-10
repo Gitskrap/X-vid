@@ -29,6 +29,7 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
   final PageController _pageController = PageController();
   int _currentIndex = 0;
   bool _poolUpdateScheduled = false;
+  String? _lastMarkedVideoId;
 
   @override
   void initState() {
@@ -58,7 +59,11 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
         final tweets = feedAsync.value!.tweets;
 
         if (page < tweets.length) {
-          Repository.markMediaAsPlayed(tweets[page].id);
+          final id = tweets[page].id;
+          if (_lastMarkedVideoId != id) {
+            _lastMarkedVideoId = id;
+            unawaited(Repository.markMediaAsPlayed(id));
+          }
         }
 
         final settings = ref.read(settingsProvider);
@@ -107,6 +112,13 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
         _managePool();
         final tweets = ref.read(feedNotifierProvider).value?.tweets;
         if (tweets != null && _currentIndex < tweets.length) {
+          // The first video counts as viewed too; it was never marked when
+          // the user opened the app without swiping.
+          final visibleId = tweets[_currentIndex].id;
+          if (_lastMarkedVideoId != visibleId) {
+            _lastMarkedVideoId = visibleId;
+            unawaited(Repository.markMediaAsPlayed(visibleId));
+          }
           // One throttled detail request for the visible video, not for the
           // whole feed. Never block rendering or playback.
           unawaited(ref.read(feedNotifierProvider.notifier)
