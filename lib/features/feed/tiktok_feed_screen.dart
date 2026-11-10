@@ -316,8 +316,11 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
           children: [
             Text(
               emptyList
-                  ? 'Ajoute des comptes dans Abonnements pour remplir ton fil.'
-                  : 'Aucune vidéo disponible parmi tes abonnements locaux.',
+                  ? 'Ajoute des hashtags, aime des vidéos ou suis des comptes '
+                       'pour personnaliser ton fil. Seules les vidéos de '
+                       'plus de 15 secondes apparaissent.'
+                  : 'Aucune vidéo de plus de 15 secondes disponible '
+                       'pour tes centres d’intérêt.',
               textAlign: TextAlign.center,
               style: const TextStyle(color: Colors.white70),
             ),
