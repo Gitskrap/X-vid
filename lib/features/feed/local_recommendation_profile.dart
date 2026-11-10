@@ -36,10 +36,18 @@ Set<String> captionKeywords(String caption) {
 /// with matching hashtags or sufficiently overlapping descriptive keywords.
 /// A single generic shared word is not usually evidence of the same genre.
 bool excludedByFeedback(
-    Tweet candidate, Map<String, LocalVideoReaction> reactions) {
+    Tweet candidate, Map<String, LocalVideoReaction> reactions, {
+    Iterable<String> blockedHashtags = const <String>[],
+  }) {
+  final tags = captionHashtags(candidate.text);
+  // Explicit blacklist is stronger than a positive local like and any
+  // subscription. A blacklisted hashtag must never enter the Videos feed.
+  final blocked = blockedHashtags
+      .map((tag) => tag.trim().replaceFirst(RegExp(r'^#+'), '').toLowerCase())
+      .toSet();
+  if (tags.intersection(blocked).isNotEmpty) return true;
   if (reactions[candidate.id]?.value == -1) return true;
   if (reactions[candidate.id]?.value == 1) return false;
-  final tags = captionHashtags(candidate.text);
   final words = captionKeywords(candidate.text);
   if (tags.isEmpty && words.isEmpty) return false;
 
@@ -60,8 +68,12 @@ bool excludedByFeedback(
 }
 
 List<Tweet> filterByFeedback(
-        Iterable<Tweet> videos, Map<String, LocalVideoReaction> reactions) =>
-    videos.where((video) => !excludedByFeedback(video, reactions)).toList();
+  Iterable<Tweet> videos,
+  Map<String, LocalVideoReaction> reactions, {
+  Iterable<String> blockedHashtags = const <String>[],
+}) =>
+    videos.where((video) => !excludedByFeedback(
+        video, reactions, blockedHashtags: blockedHashtags)).toList();
 
 /// Local liked videos become stronger genre signals than passive follows.
 /// A negative signal is never used to generate a search query.
@@ -71,6 +83,7 @@ List<String> personalizedVideoTopics(
   int limit = 3,
   Iterable<String> followedHashtags = const <String>[],
   Iterable<Tweet> watchedVideos = const <Tweet>[],
+  Iterable<String> blockedHashtags = const <String>[],
 }) {
   final scores = <String, int>{};
   for (final topic in topicsFromSubscribedVideos(savedSubscriptionVideos,
@@ -118,8 +131,13 @@ List<String> personalizedVideoTopics(
       scores[word] = (scores[word] ?? 0) + 3;
     }
   }
-  // Rejected themes should not initiate new discovery requests.
+  // User blacklist always wins over subscriptions, likes, watches and tags.
+  // It also prevents searching X for blacklisted topics.
+  final blocked = blockedHashtags
+      .map((tag) => tag.trim().replaceFirst(RegExp(r'^#+'), '').toLowerCase())
+      .toSet();
   scores.removeWhere((topic, score) =>
+      blocked.contains(topic) ||
       rejectedTags.contains(topic) ||
       (rejectedWords.contains(topic) && score <= 8));
   final ranked = scores.entries.toList()
