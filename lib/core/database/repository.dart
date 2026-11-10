@@ -12,6 +12,7 @@ const String tableAccounts = 'accounts';
 const String tableSubscriptions = 'subscriptions';
 const String tableCachedMedia = 'cached_media';
 const String tableHashtags = 'hashtags';
+const String tableBlockedHashtags = 'blocked_hashtags';
 const String tableLocalReactions = 'local_video_reactions';
 
 class Repository {
@@ -32,7 +33,7 @@ class Repository {
     }
     return await openDatabase(
       path,
-      version: 13,
+      version: 14,
       onCreate: (db, version) async {
         await db.execute(
           'CREATE TABLE $tableAccounts (id TEXT PRIMARY KEY, screen_name TEXT, rest_id TEXT, auth_header TEXT)',
@@ -42,6 +43,9 @@ class Repository {
         );
         await db.execute(
           'CREATE TABLE $tableHashtags (tag TEXT PRIMARY KEY, added_at INTEGER)',
+        );
+        await db.execute(
+          'CREATE TABLE $tableBlockedHashtags (tag TEXT PRIMARY KEY, added_at INTEGER)',
         );
         await db.execute('''
           CREATE TABLE $tableCachedMedia (
@@ -169,6 +173,12 @@ class Repository {
           await db.execute(
               'ALTER TABLE $tableCachedMedia ADD COLUMN duration_ms INTEGER');
         }
+        if (oldVersion < 14) {
+          await db.execute(
+            'CREATE TABLE IF NOT EXISTS $tableBlockedHashtags '
+            '(tag TEXT PRIMARY KEY, added_at INTEGER)',
+          );
+        }
       },
     );
   }
@@ -236,6 +246,29 @@ class Repository {
   static Future<void> deleteHashtag(String tag) async {
     final db = await database;
     await db.delete(tableHashtags, where: 'tag = ?', whereArgs: [tag]);
+  }
+
+  /// Blacklist is independent from followed hashtags and survives upgrades.
+  /// A tag is stored in normalized lowercase form without the leading #.
+  static Future<List<String>> getBlockedHashtags() async {
+    final db = await database;
+    final rows = await db.query(tableBlockedHashtags,
+        orderBy: 'added_at DESC');
+    return rows.map((row) => row['tag'] as String).toList();
+  }
+
+  static Future<void> addBlockedHashtag(String tag) async {
+    final db = await database;
+    await db.insert(tableBlockedHashtags, {
+      'tag': tag,
+      'added_at': DateTime.now().millisecondsSinceEpoch,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  static Future<void> removeBlockedHashtag(String tag) async {
+    final db = await database;
+    await db.delete(tableBlockedHashtags,
+        where: 'tag = ?', whereArgs: [tag]);
   }
 
   static Future<void> insertAccount(Account account) async {
