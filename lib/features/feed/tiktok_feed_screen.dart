@@ -370,7 +370,6 @@ class TiktokFeedItem extends ConsumerWidget {
   final bool isVisible;
   final bool autoFullscreen;
   final VoidCallback? onPlaybackError;
-  final Future<void> Function(String tweetId)? onLike;
 
   const TiktokFeedItem({
     super.key,
@@ -378,7 +377,6 @@ class TiktokFeedItem extends ConsumerWidget {
     required this.isVisible,
     this.autoFullscreen = false,
     this.onPlaybackError,
-    this.onLike,
   });
 
   @override
@@ -399,7 +397,6 @@ class TiktokFeedItem extends ConsumerWidget {
               tweet: tweet,
               onFullscreen: onFullscreen,
               isFullscreen: isFullscreen,
-              onLike: onLike,
             ),
             onPlaybackError: onPlaybackError,
           ),
