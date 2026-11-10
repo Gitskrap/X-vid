@@ -340,6 +340,12 @@ class PlaybackSettingsPage extends ConsumerWidget {
                 'l’application, indépendamment des abonnements X.'),
           ),
           const ListTile(
+            leading: Icon(Icons.timer_outlined),
+            title: Text('Vidéos de plus de 15 secondes'),
+            subtitle: Text('L’onglet Vidéos refuse les clips de 15 secondes '
+                'ou moins et vérifie la durée lorsqu’elle est inconnue.'),
+          ),
+          const ListTile(
             leading: Icon(Icons.favorite_border),
             title: Text('J’aime et Je n’aime pas privés'),
             subtitle: Text('Ces choix restent dans Twitter vidéo : '
