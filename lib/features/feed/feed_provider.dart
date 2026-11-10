@@ -582,6 +582,31 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
     state = AsyncData(currentState.copyWith(isLoadingMore: true));
 
     try {
+      // Request genuinely new recommendations first, before long and often
+      // exhausted subscription/API retry loops. This makes scroll-to-next
+      // responsive and prevents cache-only recycling.
+      if (settings.suggestSimilarVideos) {
+        final initialSuggestions = await _fetchRelatedVideos(
+          onlyLocalSubscriptionVideos(currentState.tweets, allowedHandles),
+          allowedHandles,
+          ref.read(twitterClientProvider),
+          reactions,
+          followedHashtags,
+          blockedHashtags,
+        );
+        if (!ref.mounted) return;
+        final present = currentState.tweets.map((t) => t.id).toSet();
+        final firstFresh = initialSuggestions
+            .where((t) => present.add(t.id))
+            .take(settings.loadBatchSize).toList();
+        if (firstFresh.length >= 3) {
+          state = AsyncData(currentState.copyWith(
+            tweets: [...currentState.tweets, ...firstFresh],
+            isLoadingMore: false,
+          ));
+          return;
+        }
+      }
       final seenIds = state.value!.tweets.map((t) => t.id).toSet();
       final previouslyViewed = await Repository.getViewedVideoIds();
 
