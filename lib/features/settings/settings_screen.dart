@@ -8,6 +8,7 @@ import '../auth/login_screen.dart';
 import '../../core/database/repository.dart';
 import '../../core/utils/media_cache_manager.dart';
 import '../feed/feed_provider.dart';
+import '../feed/local_video_reactions_provider.dart';
 import '../subscriptions/subscription_list_screen.dart';
 import '../subscriptions/subscription_import_screen.dart';
 import 'log_viewer_screen.dart';
@@ -338,13 +339,20 @@ class PlaybackSettingsPage extends ConsumerWidget {
             subtitle: Text('Ton fil part des comptes enregistrés dans '
                 'l’application, indépendamment des abonnements X.'),
           ),
+          const ListTile(
+            leading: Icon(Icons.favorite_border),
+            title: Text('J’aime et Je n’aime pas privés'),
+            subtitle: Text('Ces choix restent dans Twitter vidéo : '
+                'aucun like ni dislike envoyé à ton compte X.'),
+          ),
           SwitchListTile(
             secondary: const Icon(Icons.auto_awesome_outlined),
             title: const Text('Vidéos similaires'),
-            subtitle: const Text('Proposer aussi des vidéos d’autres '
-                'comptes sur des thèmes proches de tes abonnements. '
-                'En désactivant, seules les vidéos de tes abonnements '
-                'locaux seront proposées.'),
+            subtitle: const Text('Proposer des vidéos proches des thèmes '
+                'de tes abonnements et de tes J’aime locaux, en évitant '
+                'les styles rejetés avec Je n’aime pas. '
+                'Les recherches de vidéos utilisent les mots-clés '
+                'des légendes et hashtags.'),
             value: settings.suggestSimilarVideos,
             onChanged: (enabled) => notifier.updateDiscoveryParam(
               suggestSimilarVideos: enabled,
@@ -597,6 +605,35 @@ class StorageSettingsPage extends ConsumerWidget {
             onTap: () async {
               await CustomMediaCacheManager.clearCache();
               onRefresh();
+            },
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.restart_alt),
+            title: const Text('Réinitialiser mes réactions'),
+            subtitle: const Text('Effacer les J’aime et Je n’aime pas '
+                'enregistrés dans Twitter vidéo uniquement.'),
+            onTap: () async {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (dialogContext) => AlertDialog(
+                  title: const Text('Effacer les réactions ?'),
+                  content: const Text('Tes préférences locales seront '
+                      'supprimées. Cela ne modifiera aucun compte X.'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(dialogContext, false),
+                      child: const Text('Annuler'),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(dialogContext, true),
+                      child: const Text('Effacer'),
+                    ),
+                  ],
+                ),
+              );
+              if (confirm != true || !context.mounted) return;
+              await ref.read(localVideoReactionsProvider.notifier).clearAll();
             },
           ),
           const Divider(),
