@@ -279,8 +279,7 @@ class _HashtagMediaFeedScreenState
       if (state == null) return;
       final tweets = state.tweets;
       if (ref.read(navigationProvider).selectedHashtag == widget.hashtag) {
-        ref.read(castPlaylistProvider.notifier).state =
-            List<Tweet>.unmodifiable(tweets);
+        ref.read(castPlaylistProvider.notifier).setQueue(tweets);
       }
 
       final pool = ref.read(playerPoolProvider.notifier);
