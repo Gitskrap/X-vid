@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:flutter/services.dart';
 import 'features/feed/tiktok_feed_screen.dart';
+import 'features/feed/persistent_fullscreen_provider.dart';
 import 'features/search/video_search_screen.dart';
 import 'features/player/video_ui_provider.dart';
 import 'features/security/biometric_gate.dart';
@@ -99,6 +100,7 @@ class MainScaffold extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final nav = ref.watch(navigationProvider);
     final videoUiHidden = ref.watch(videoUiHiddenProvider);
+    final persistentFullscreen = ref.watch(persistentFullscreenProvider);
     final landscape = MediaQuery.orientationOf(context) == Orientation.landscape;
     final navNotifier = ref.read(navigationProvider.notifier);
 
@@ -159,6 +161,7 @@ class MainScaffold extends ConsumerWidget {
         extendBody: false,
         body: body,
         bottomNavigationBar: nav.isVideoSearchOpen ||
+                (persistentFullscreen && nav.currentTab == MainTab.media) ||
                 (landscape && nav.currentTab == MainTab.media) ||
                 (videoUiHidden && nav.currentTab == MainTab.media)
             ? null
