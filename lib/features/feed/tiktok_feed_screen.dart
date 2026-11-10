@@ -114,8 +114,7 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
         _managePool();
         final tweets = ref.read(feedNotifierProvider).value?.tweets;
         if (tweets != null && _currentIndex < tweets.length) {
-          ref.read(castPlaylistProvider.notifier).state =
-              List<Tweet>.unmodifiable(tweets);
+          ref.read(castPlaylistProvider.notifier).setQueue(tweets);
           // The first video counts as viewed too; it was never marked when
           // the user opened the app without swiping.
           final visibleId = tweets[_currentIndex].id;
