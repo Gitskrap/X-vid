@@ -483,7 +483,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
         final related = settings.suggestSimilarVideos
             ? await _fetchRelatedVideos(
                 [...freshTagged, ...localTagged], allowedHandles, client,
-                reactions, followedHashtags)
+                reactions, followedHashtags, blockedHashtags)
             : <Tweet>[];
         if (!ref.mounted) return;
         final mixed = filterByFeedback(
@@ -525,7 +525,8 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
       state = AsyncData(currentState.copyWith(isLoadingMore: true));
       final suggestions = settings.suggestSimilarVideos
           ? await _fetchRelatedVideos(const [], allowedHandles,
-              ref.read(twitterClientProvider), reactions, followedHashtags)
+              ref.read(twitterClientProvider), reactions, followedHashtags,
+              blockedHashtags)
           : <Tweet>[];
       if (!ref.mounted) return;
       final seen = currentState.tweets.map((t) => t.id).toSet();
@@ -686,6 +687,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
               ref.read(twitterClientProvider),
               reactions,
               followedHashtags,
+              blockedHashtags,
             )
           : <Tweet>[];
       if (!ref.mounted) return;
@@ -718,6 +720,16 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
     }
   }
 
+
+  /// Remove a rejected video immediately, without restarting the async feed.
+  /// PageView continues at its current index, showing the next clip.
+  void hideDislikedVideo(String id) {
+    final current = state.value;
+    if (current == null) return;
+    final filtered = current.tweets.where((tweet) => tweet.id != id).toList();
+    if (filtered.length == current.tweets.length) return;
+    state = AsyncData(current.copyWith(tweets: filtered));
+  }
 
 }
 
