@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'video_audio_provider.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
@@ -19,6 +21,13 @@ class PlayerInstance {
 class PlayerPoolNotifier extends Notifier<Map<String, PlayerInstance>> {
   @override
   Map<String, PlayerInstance> build() {
+    // One setting for all pooled videos. A fresh process always starts muted,
+    // even when the previous application session played with sound on.
+    ref.listen(videoMutedProvider, (before, muted) {
+      for (final instance in state.values) {
+        unawaited(instance.player.setVolume(muted ? 0 : 100));
+      }
+    });
     ref.onDispose(() {
       for (final instance in state.values) {
         instance.dispose();
@@ -37,7 +46,9 @@ class PlayerPoolNotifier extends Notifier<Map<String, PlayerInstance>> {
         enableHardwareAcceleration: true,
       ),
     );
-    player.open(Media(url), play: false); // Pre-load but don't play
+    // Must mute before opening media: no audible first frame at app launch.
+    unawaited(player.setVolume(ref.read(videoMutedProvider) ? 0 : 100));
+    unawaited(player.open(Media(url), play: false)); // Pre-load silently
 
     state = {...state, id: PlayerInstance(player, controller)};
   }

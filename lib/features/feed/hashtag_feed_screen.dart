@@ -8,6 +8,8 @@ import '../../core/models/tweet.dart';
 import '../settings/settings_provider.dart';
 import '../settings/settings_screen.dart';
 import 'hashtag_provider.dart';
+import 'hashtag_blacklist_provider.dart';
+import 'local_video_reactions_provider.dart';
 import 'widgets/tweet_text_overlay.dart';
 
 class HashtagListScreen extends ConsumerWidget {
@@ -47,9 +49,49 @@ class HashtagListScreen extends ConsumerWidget {
     );
   }
 
+  void _showBlockHashtagDialog(BuildContext context, WidgetRef ref) {
+    final controller = TextEditingController();
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Blacklist de hashtags'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            prefixText: '#',
+            hintText: 'Hashtag à exclure des recommandations',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              try {
+                final tag = normalizeBlockedHashtag(controller.text);
+                await ref.read(hashtagBlacklistProvider.notifier).add(tag);
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+              } catch (error) {
+                if (!dialogContext.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Hashtag non ajouté : $error')),
+                );
+              }
+            },
+            child: const Text('Bloquer'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final hashtagsAsync = ref.watch(hashtagListProvider);
+    final blockedAsync = ref.watch(hashtagBlacklistProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -69,47 +111,88 @@ class HashtagListScreen extends ConsumerWidget {
         ],
       ),
       body: hashtagsAsync.when(
-        data: (tags) => tags.isEmpty
-            ? Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.tag, size: 64, color: Colors.white24),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Ajoute des hashtags pour orienter les recommandations '
-                      'de l’onglet Vidéos.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white70),
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () => _showAddHashtagDialog(context, ref),
-                      child: const Text('Add your first hashtag'),
-                    ),
-                  ],
-                ),
-              )
-            : ListView.builder(
-                itemCount: tags.length,
-                itemBuilder: (context, index) {
-                  final tag = tags[index];
-                  return ListTile(
-                    leading: const Icon(Icons.tag, color: Colors.blue),
-                    title: Text(tag, style: const TextStyle(fontSize: 16)),
-                    subtitle: const Text('Influence les suggestions de vidéos'),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 20),
-                      onPressed: () => _confirmDelete(context, ref, tag),
-                    ),
-                    onTap: () {
-                      ref.read(navigationProvider.notifier).selectHashtag(tag);
-                    },
-                  );
-                },
+        data: (tags) => ListView(
+          padding: const EdgeInsets.only(bottom: 28),
+          children: [
+            ListTile(
+              leading: const Icon(Icons.tag, color: Color(0xFF70F0CE)),
+              title: const Text('Hashtags suivis'),
+              subtitle: const Text('Favorisent les recommandations Vidéos'),
+              trailing: IconButton(
+                icon: const Icon(Icons.add_circle_outline),
+                tooltip: 'Suivre un hashtag',
+                onPressed: () => _showAddHashtagDialog(context, ref),
               ),
+            ),
+            if (tags.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                child: Text('Aucun hashtag suivi. Ajoute des sujets qui '
+                    't’intéressent pour personnaliser le fil Vidéos.'),
+              ),
+            for (final tag in tags)
+              ListTile(
+                leading: const Icon(Icons.tag),
+                title: Text(tag),
+                onTap: () =>
+                    ref.read(navigationProvider.notifier).selectHashtag(tag),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  tooltip: 'Ne plus suivre $tag',
+                  onPressed: () => _confirmDelete(context, ref, tag),
+                ),
+              ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.block, color: Color(0xFFFF8B8B)),
+              title: const Text('Blacklist des hashtags'),
+              subtitle: const Text(
+                'Ne jamais recommander de vidéos avec ces hashtags. '
+                'Le blocage est prioritaire sur les likes et abonnements.',
+              ),
+              trailing: IconButton(
+                icon: const Icon(Icons.add_circle_outline),
+                tooltip: 'Bloquer un hashtag',
+                onPressed: () => _showBlockHashtagDialog(context, ref),
+              ),
+            ),
+            ...blockedAsync.when(
+              data: (blocked) => blocked.isEmpty
+                  ? <Widget>[
+                      const Padding(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 12),
+                        child: Text('Aucun hashtag bloqué.',
+                            style: TextStyle(color: Colors.white70)),
+                      ),
+                    ]
+                  : <Widget>[
+                      for (final tag in blocked)
+                        ListTile(
+                          leading: const Icon(Icons.block_outlined,
+                              color: Color(0xFFFF8B8B)),
+                          title: Text('#$tag'),
+                          subtitle: const Text('Exclu des recommandations'),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.close),
+                            tooltip: 'Débloquer #$tag',
+                            onPressed: () async {
+                              await ref.read(hashtagBlacklistProvider.notifier)
+                                  .remove(tag);
+                            },
+                          ),
+                        ),
+                    ],
+              loading: () => <Widget>[
+                const Center(child: CircularProgressIndicator()),
+              ],
+              error: (error, stack) =>
+                  <Widget>[Text('Blacklist indisponible : $error')],
+            ),
+          ],
+        ),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, st) => Center(child: Text('Error: $e')),
+        error: (error, stack) => Center(child: Text('Erreur : $error')),
       ),
     );
   }
@@ -214,6 +297,7 @@ class _HashtagMediaFeedScreenState
   @override
   Widget build(BuildContext context) {
     final feedAsync = ref.watch(hashtagMediaProvider(widget.hashtag));
+    final reactions = ref.watch(localVideoReactionsProvider).value;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -248,7 +332,9 @@ class _HashtagMediaFeedScreenState
       ),
       body: feedAsync.when(
         data: (state) {
-          final tweets = state.tweets;
+          final tweets = state.tweets.where(
+            (tweet) => reactions?[tweet.id]?.value != -1,
+          ).toList();
           if (tweets.isEmpty) {
             return const Center(
                 child: Text('No media found',
@@ -269,6 +355,20 @@ class _HashtagMediaFeedScreenState
                     key: ValueKey('hash_feed_${tweets[index].id}'),
                     tweet: tweets[index],
                     isVisible: index == _currentIndex,
+                    onDislike: () {
+                      if (!mounted || index != _currentIndex) return;
+                      // The optimistic local reaction filters the current
+                      // clip immediately and reveals the next one.
+                      if (index >= tweets.length - 1) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (!mounted || !_pageController.hasClients) return;
+                          _pageController.jumpToPage(
+                              (tweets.length - 2).clamp(0, tweets.length));
+                          setState(() => _currentIndex =
+                              (tweets.length - 2).clamp(0, tweets.length));
+                        });
+                      }
+                    },
                     onPlaybackError: () {
                       if (index == _currentIndex && mounted) {
                         Future.delayed(
@@ -325,6 +425,7 @@ class HashtagFeedItem extends StatelessWidget {
   final bool isVisible;
   final bool autoFullscreen;
   final VoidCallback? onPlaybackError;
+  final VoidCallback? onDislike;
 
   const HashtagFeedItem({
     super.key,
@@ -332,6 +433,7 @@ class HashtagFeedItem extends StatelessWidget {
     required this.isVisible,
     this.autoFullscreen = false,
     this.onPlaybackError,
+    this.onDislike,
   });
 
   @override
@@ -344,7 +446,9 @@ class HashtagFeedItem extends StatelessWidget {
         tweet: tweet,
         onFullscreen: onFullscreen,
         isFullscreen: isFullscreen,
+        onDislike: onDislike,
       ),
+      onDislike: onDislike,
       onPlaybackError: onPlaybackError,
     );
   }

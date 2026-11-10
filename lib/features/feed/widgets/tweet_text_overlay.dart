@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -10,6 +11,8 @@ import '../../../core/database/entities.dart';
 import '../../subscriptions/subscription_list_screen.dart';
 import 'package:flutter/foundation.dart';
 import '../local_video_reactions_provider.dart';
+import '../persistent_fullscreen_provider.dart';
+import '../../player/video_audio_provider.dart';
 import '../x_like_counter.dart';
 import '../tweet_detail_screen.dart';
 
@@ -17,12 +20,14 @@ class TweetTextOverlay extends ConsumerStatefulWidget {
   final Tweet tweet;
   final VoidCallback? onFullscreen;
   final bool isFullscreen;
+  final VoidCallback? onDislike;
 
   const TweetTextOverlay({
     super.key,
     required this.tweet,
     this.onFullscreen,
     this.isFullscreen = false,
+    this.onDislike,
   });
 
   @override
@@ -38,8 +43,35 @@ class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
         : 94.0 + MediaQuery.paddingOf(context).bottom;
     final rightPadding = widget.isFullscreen ? 24.0 : 8.0;
 
+    final muted = ref.watch(videoMutedProvider);
+    final immersive = ref.watch(persistentFullscreenProvider);
     return Stack(
       children: [
+        // Accessible above the video without overlapping the author card.
+        Positioned(
+          top: immersive ? 14 : MediaQuery.paddingOf(context).top + 65,
+          right: 10,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton.filledTonal(
+                tooltip: muted ? 'Activer le son' : 'Couper le son',
+                onPressed: () => ref.read(videoMutedProvider.notifier).toggle(),
+                icon: Icon(muted ? Icons.volume_off : Icons.volume_up),
+              ),
+              if (widget.onFullscreen != null) ...[
+                const SizedBox(width: 4),
+                IconButton.filledTonal(
+                  tooltip: immersive ? 'Quitter le plein écran'
+                      : 'Rester en plein écran en changeant de vidéo',
+                  onPressed: widget.onFullscreen,
+                  icon: Icon(immersive
+                      ? Icons.fullscreen_exit : Icons.fullscreen),
+                ),
+              ],
+            ],
+          ),
+        ),
         // Text Overlay (Bottom)
         Positioned(
           bottom: bottomPadding,
@@ -167,7 +199,14 @@ class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
               ? Icons.thumb_down_rounded : Icons.thumb_down_outlined,
           color: reaction == -1 ? const Color(0xFFFFB47E) : Colors.white,
           label: 'Pas pour moi',
-          onTap: () => record(-1),
+          onTap: () {
+            // The swipe/hide must not wait for the database or any X API.
+            unawaited(ref.read(localVideoReactionsProvider.notifier)
+                .reject(widget.tweet).catchError((Object error) {
+              debugPrint('Failed to save local dislike: $error');
+            }));
+            widget.onDislike?.call();
+          },
         ),
         const SizedBox(height: 7),
         _ActionButton(

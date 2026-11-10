@@ -13,6 +13,7 @@ import '../../core/models/tweet.dart';
 import '../../core/navigation/navigation_provider.dart';
 import '../feed/feed_provider.dart';
 import '../feed/tiktok_feed_screen.dart';
+import '../feed/local_video_reactions_provider.dart';
 import '../player/player_pool_provider.dart';
 import '../player/video_ui_provider.dart';
 import '../settings/settings_provider.dart';
@@ -133,7 +134,9 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
       }
       if (!mounted || _searchVersion != requestVersion) return;
 
-      final videos = videoSearchResults(response.tweets);
+      final reactions = ref.read(localVideoReactionsProvider).value;
+      final videos = videoSearchResults(response.tweets)
+          .where((tweet) => reactions?[tweet.id]?.value != -1).toList();
       final knownIds = _results.map((tweet) => tweet.id).toSet();
       final additional = videos.where((tweet) => !knownIds.contains(tweet.id));
       setState(() {
@@ -247,6 +250,26 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
                   key: ValueKey(_results[index].id),
                   tweet: _results[index],
                   isVisible: index == _index,
+                  onDislike: () {
+                    if (!mounted || index != _index) return;
+                    setState(() {
+                      _results.removeAt(index);
+                      if (_results.isNotEmpty && _index >= _results.length) {
+                        _index = _results.length - 1;
+                      }
+                    });
+                    if (_results.isNotEmpty && index >= _results.length) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted && _pageController.hasClients) {
+                          _pageController.jumpToPage(_index);
+                        }
+                      });
+                    }
+                    if (_hasMore && _results.length - _index < 4) {
+                      unawaited(_runSearch(more: true));
+                    }
+                    _warmupPlayers();
+                  },
                 ),
               ),
             )
