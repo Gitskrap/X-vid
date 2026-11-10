@@ -10,6 +10,7 @@ import '../../../core/database/entities.dart';
 import '../../subscriptions/subscription_list_screen.dart';
 import 'package:flutter/foundation.dart';
 import '../local_video_reactions_provider.dart';
+import '../x_like_counter.dart';
 import '../tweet_detail_screen.dart';
 
 class TweetTextOverlay extends ConsumerStatefulWidget {
@@ -149,11 +150,16 @@ class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _ActionButton(
-          icon: reaction == 1 ? Icons.favorite : Icons.favorite_border,
-          color: reaction == 1 ? const Color(0xFFFF637E) : Colors.white,
-          label: 'J’aime',
-          onTap: () => record(1),
+        Tooltip(
+          message: 'Appui : J’aime privé dans Twitter vidéo. '
+              'Le chiffre est le nombre public de J’aime sur X '
+              '(dernière valeur récupérée), jamais modifié par l’application.',
+          child: _ActionButton(
+            icon: reaction == 1 ? Icons.favorite : Icons.favorite_border,
+            color: reaction == 1 ? const Color(0xFFFF637E) : Colors.white,
+            label: publicXLikeCountLabel(widget.tweet),
+            onTap: () => record(1),
+          ),
         ),
         const SizedBox(height: 7),
         _ActionButton(
