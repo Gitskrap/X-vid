@@ -69,11 +69,51 @@ List<String> personalizedVideoTopics(
   Iterable<Tweet> savedSubscriptionVideos,
   Map<String, LocalVideoReaction> reactions, {
   int limit = 3,
+  Iterable<String> followedHashtags = const <String>[],
 }) {
   final scores = <String, int>{};
   for (final topic in topicsFromSubscribedVideos(savedSubscriptionVideos,
       limit: 8)) {
     scores[topic] = (scores[topic] ?? 0) + 2;
+  }
+
+  // Hashtags deliberately followed in Twitter vidéo represent explicit
+  // interests. They outweigh passive subscriptions but not personal likes.
+  // Never send the saved hashtag list itself to an external recommendation API.
+  for (final hashtag in followedHashtags) {
+    final topic = hashtag.trim().replaceFirst(RegExp(r'^#+'), '').toLowerCase();
+    if (RegExp(r'^[\\wÀ-ÿ]{2,40}
+  final rejectedWords = <String>{};
+  for (final feedback in reactions.values) {
+    if (feedback.value == -1) {
+      rejectedTags.addAll(captionHashtags(feedback.caption));
+      rejectedWords.addAll(captionKeywords(feedback.caption));
+    }
+  }
+  for (final feedback in reactions.values) {
+    if (feedback.value != 1) continue;
+    for (final tag in captionHashtags(feedback.caption)) {
+      scores[tag] = (scores[tag] ?? 0) + 8;
+    }
+    for (final word in captionKeywords(feedback.caption)) {
+      scores[word] = (scores[word] ?? 0) + 3;
+    }
+  }
+  // Rejected themes should not initiate new discovery requests.
+  scores.removeWhere((topic, score) =>
+      rejectedTags.contains(topic) ||
+      (rejectedWords.contains(topic) && score <= 8));
+  final ranked = scores.entries.toList()
+    ..sort((a, b) {
+      final byScore = b.value.compareTo(a.value);
+      return byScore == 0 ? a.key.compareTo(b.key) : byScore;
+    });
+  return ranked.take(limit).map((entry) => entry.key).toList();
+}
+).hasMatch(topic) &&
+        !_stopWords.contains(topic)) {
+      scores[topic] = (scores[topic] ?? 0) + 6;
+    }
   }
 
   final rejectedTags = <String>{};
