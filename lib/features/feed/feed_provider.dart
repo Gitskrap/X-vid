@@ -13,6 +13,9 @@ import '../settings/settings_provider.dart';
 import '../subscriptions/subscription_list_screen.dart';
 import 'local_video_filter.dart';
 import 'similar_video_discovery.dart';
+import 'local_recommendation_profile.dart';
+import 'local_video_reactions_provider.dart';
+import '../../core/models/local_video_reaction.dart';
 import '../player/player_pool_provider.dart';
 
 final twitterClientProvider = Provider((ref) => TwitterClient());
@@ -90,8 +93,11 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
     List<Tweet> examples,
     Set<String> localHandles,
     TwitterClient client,
+    Map<String, LocalVideoReaction> reactions,
   ) async {
-    final topics = topicsFromSubscribedVideos(examples, limit: 2);
+    // Liked clips have stronger influence than passive follows. Rejected
+    // captions/hashtags reduce suggestions, without POSTing any X likes.
+    final topics = personalizedVideoTopics(examples, reactions, limit: 3);
     if (topics.isEmpty) return const [];
     final found = <String, Tweet>{};
     final hasSession =
@@ -123,7 +129,8 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
       for (final video in result.tweets) {
         final author = video.userHandle.replaceFirst('@', '').toLowerCase();
         if (!video.isVideo || video.mediaUrls.isEmpty ||
-            localHandles.contains(author)) continue;
+            localHandles.contains(author) ||
+            excludedByFeedback(video, reactions)) continue;
         found.putIfAbsent(video.id,
             () => video.copyWith(source: 'Découverte'));
       }
@@ -290,6 +297,8 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
   @override
   FutureOr<FeedState> build() async {
     final settings = ref.watch(settingsProvider);
+    final reactions = ref.watch(localVideoReactionsProvider).value ??
+        const <String, LocalVideoReaction>{};
     // The local list, not X's follow list, is the sole source of creators.
     final subscriptions = ref.watch(subscriptionListProvider);
     // Rebuild after login, switching accounts, or logout.
@@ -313,8 +322,8 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
         filters: settings.filters,
         allowedHandles: allowedHandles,
       );
-      final localTagged = onlyLocalSubscriptionVideos(
-        localPool, allowedHandles,
+      final localTagged = filterByFeedback(
+        onlyLocalSubscriptionVideos(localPool, allowedHandles), reactions,
       ).map((t) => t.copyWith(source: 'Cache')).toList();
       AppLogger.log(
           'XFLOW: Cold start: Retrieved ${localPool.length} local candidates');
@@ -359,6 +368,8 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
 
     final client = ref.read(twitterClientProvider);
     final settings = ref.read(settingsProvider);
+    final reactions = ref.read(localVideoReactionsProvider).value ??
+        const <String, LocalVideoReaction>{};
     final allowedHandles = localVideoHandles(
         ref.read(subscriptionListProvider).allSubscriptions);
     if (allowedHandles.isEmpty) {
@@ -395,8 +406,9 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
       }
 
       if (!ref.mounted) return;
-      final freshPool =
-          onlyLocalSubscriptionVideos(freshResponse.tweets, allowedHandles);
+      final freshPool = filterByFeedback(
+          onlyLocalSubscriptionVideos(freshResponse.tweets, allowedHandles),
+          reactions);
       final freshTagged = freshPool
           .map((t) => t.copyWith(source: 'API'))
           .toList();
@@ -415,8 +427,8 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
         filters: settings.filters,
         allowedHandles: allowedHandles,
       );
-      final localTagged = onlyLocalSubscriptionVideos(
-        localPool, allowedHandles,
+      final localTagged = filterByFeedback(
+        onlyLocalSubscriptionVideos(localPool, allowedHandles), reactions,
       ).map((t) => t.copyWith(source: 'Cache')).toList();
 
       final currentAsync = ref.read(feedNotifierProvider);
@@ -435,15 +447,18 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
           settings,
           playedByUser,
           protectedIndex: resetHead ? 0 : 2,
-          currentTweets: resetHead ? [] : current.tweets,
+          currentTweets: resetHead ? [] :
+              filterByFeedback(current.tweets, reactions),
         );
 
         final related = settings.suggestSimilarVideos
             ? await _fetchRelatedVideos(
-                [...freshTagged, ...localTagged], allowedHandles, client)
+                [...freshTagged, ...localTagged], allowedHandles, client,
+                reactions)
             : <Tweet>[];
         if (!ref.mounted) return;
-        final mixed = mixRelatedVideos(processed, related);
+        final mixed = filterByFeedback(
+            mixRelatedVideos(processed, related), reactions);
         state = AsyncData(current.copyWith(
           tweets: mixed,
           cursorBottom: freshResponse.cursorBottom,
@@ -466,6 +481,8 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
     if (currentState == null || currentState.isLoadingMore) return;
 
     final settings = ref.read(settingsProvider);
+    final reactions = ref.read(localVideoReactionsProvider).value ??
+        const <String, LocalVideoReaction>{};
     final allowedHandles = localVideoHandles(
         ref.read(subscriptionListProvider).allSubscriptions);
     if (allowedHandles.isEmpty) {
@@ -510,8 +527,9 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
           allowedHandles: allowedHandles,
         );
 
-        var localNew = onlyLocalSubscriptionVideos(
-          dbCandidates, allowedHandles,
+        var localNew = filterByFeedback(
+          onlyLocalSubscriptionVideos(dbCandidates, allowedHandles),
+          reactions,
         ).where((t) {
           if (!t.isVideo || t.mediaUrls.isEmpty) return false;
           return !seenIds.contains(t.id) &&
@@ -557,8 +575,9 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
             }
           }
 
-          final localFresh = onlyLocalSubscriptionVideos(
-            effectiveResponse.tweets, allowedHandles);
+          final localFresh = filterByFeedback(
+              onlyLocalSubscriptionVideos(effectiveResponse.tweets,
+                  allowedHandles), reactions);
           final freshUnique = localFresh.where((t) {
             if (!t.isVideo || t.mediaUrls.isEmpty) return false;
             return !seenIds.contains(t.id) &&
@@ -604,7 +623,8 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
       // Shuffle candidates BEFORE taking the batch to improve diversity
       allNewTweets.shuffle();
 
-      final finalNewTweets = allNewTweets
+      final finalNewTweets = filterByFeedback(
+          allNewTweets, reactions)
           .take(settings.loadBatchSize)
           .map((t) => t.copyWith(source: t.source ?? 'Mixed'))
           .toList();
@@ -615,11 +635,13 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
                 [...state.value!.tweets, ...finalNewTweets], allowedHandles),
               allowedHandles,
               ref.read(twitterClientProvider),
+              reactions,
             )
           : <Tweet>[];
       if (!ref.mounted) return;
       final mixedNew = mixRelatedVideos(finalNewTweets, related);
-      var combined = [...state.value!.tweets, ...mixedNew];
+      var combined = filterByFeedback(
+          [...state.value!.tweets, ...mixedNew], reactions);
 
       // Apply diversity enforcement to the new tail
       combined = DiscoveryEngine.applySaturation(
