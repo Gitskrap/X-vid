@@ -108,10 +108,14 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _poolUpdateScheduled = false;
       if (mounted) {
-        if (ref.read(navigationProvider).isVideoSearchOpen) return;
+        final nav = ref.read(navigationProvider);
+        if (nav.isVideoSearchOpen || nav.selectedHashtag != null ||
+            nav.currentTab != MainTab.media) return;
         _managePool();
         final tweets = ref.read(feedNotifierProvider).value?.tweets;
         if (tweets != null && _currentIndex < tweets.length) {
+          ref.read(castPlaylistProvider.notifier).state =
+              List<Tweet>.unmodifiable(tweets);
           // The first video counts as viewed too; it was never marked when
           // the user opened the app without swiping.
           final visibleId = tweets[_currentIndex].id;
@@ -141,6 +145,21 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
         if (!mounted) return;
         if (_pageController.hasClients) _pageController.jumpToPage(0);
         setState(() => _currentIndex = 0);
+      });
+    });
+    // Keep the phone's current item aligned when the television advances.
+    ref.listen(activeCastTweetProvider, (previous, next) {
+      if (previous == null || next == null || previous == next) return;
+      final nav = ref.read(navigationProvider);
+      if (nav.currentTab != MainTab.media ||
+          nav.isVideoSearchOpen || nav.selectedHashtag != null) return;
+      final items = ref.read(feedNotifierProvider).value?.tweets ?? const <Tweet>[];
+      final index = items.indexWhere((item) => item.id == next);
+      if (index < 0) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_pageController.hasClients) return;
+        _pageController.jumpToPage(index);
+        setState(() => _currentIndex = index);
       });
     });
     final account = ref.watch(accountProvider);
