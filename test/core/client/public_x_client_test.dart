@@ -27,6 +27,19 @@ void main() {
     expect(response.cursorBottom, 'next');
   });
 
+  test('public video search prefers media results over text timeline',
+      () async {
+    final client = PublicXClient(client: MockClient((request) async {
+      expect(request.url.queryParameters['feed'], 'media');
+      expect(request.url.queryParameters['q'], '#Nature filter:videos');
+      return http.Response(jsonEncode({
+        'code': 200, 'results': [],
+      }), 200);
+    }));
+    final response = await client.searchVideos('#Nature');
+    expect(response.tweets, isEmpty);
+  });
+
   test('public account discovery decodes real user fields', () {
     final users = PublicXClient.decodeSuggestions({
       'code': 200,

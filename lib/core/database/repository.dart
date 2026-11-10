@@ -718,6 +718,20 @@ class Repository {
     });
   }
 
+  /// Videos already opened by the user must not be served as discoveries
+  /// again on restart. This is a local-only playback index.
+  static Future<Set<String>> getViewedVideoIds({int limit = 3000}) async {
+    final db = await database;
+    final rows = await db.query(
+      tableCachedMedia,
+      columns: ['id'],
+      where: 'played_count > 0 OR duration_watched >= 7',
+      orderBy: 'last_played_at DESC',
+      limit: limit,
+    );
+    return rows.map((row) => row['id'] as String).toSet();
+  }
+
   /// Record meaningful playback rather than counting a quick scroll past.
   /// Watch time is local, never sent to X or a recommendation service.
   static Future<void> recordMeaningfulVideoWatch(

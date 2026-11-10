@@ -14,6 +14,7 @@ import '../../core/navigation/navigation_provider.dart';
 import '../feed/feed_provider.dart';
 import '../feed/tiktok_feed_screen.dart';
 import '../feed/local_video_reactions_provider.dart';
+import '../cast/cast_video_button.dart';
 import '../player/player_pool_provider.dart';
 import '../player/video_ui_provider.dart';
 import '../settings/settings_provider.dart';
@@ -44,6 +45,7 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
   bool _loadingMore = false;
   bool _hasMore = false;
   bool _usingPublicSearch = false;
+  bool _usingCachedSearch = false;
   bool _poolScheduled = false;
 
   @override
@@ -86,6 +88,7 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
         _cursor = null;
         _hasMore = false;
         _usingPublicSearch = false;
+        _usingCachedSearch = false;
         _index = 0;
         _isLoading = true;
         _error = null;
@@ -135,14 +138,22 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
       if (!mounted || _searchVersion != requestVersion) return;
 
       final reactions = ref.read(localVideoReactionsProvider).value;
-      final videos = videoSearchResults(response.tweets)
+      var videos = videoSearchResults(response.tweets)
           .where((tweet) => reactions?[tweet.id]?.value != -1).toList();
+      bool cacheOnly = false;
+      if (!more && videos.isEmpty) {
+        videos = (await Repository.getHashtagCachedMedia(text, 50,
+          filters: const {MediaFilter.video}))
+          .where((tweet) => reactions?[tweet.id]?.value != -1).toList();
+        cacheOnly = videos.isNotEmpty;
+      }
       final knownIds = _results.map((tweet) => tweet.id).toSet();
       final additional = videos.where((tweet) => !knownIds.contains(tweet.id));
       setState(() {
         _results = more ? [..._results, ...additional] : videos;
         _usingPublicSearch = usePublic;
-        _cursor = response.cursorBottom;
+        _usingCachedSearch = cacheOnly;
+        _cursor = cacheOnly ? null : response.cursorBottom;
         _hasMore = response.tweets.isNotEmpty &&
             response.cursorBottom != null &&
             response.cursorBottom!.isNotEmpty &&
@@ -159,7 +170,34 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
       _warmupPlayers();
     } catch (error) {
       if (!mounted || _searchVersion != requestVersion) return;
-      setState(() => _error = 'Erreur lors de la recherche sur X : $error');
+      if (!more) {
+        try {
+          final local = await Repository.getHashtagCachedMedia(
+              text, 50, filters: const {MediaFilter.video});
+          if (!mounted || _searchVersion != requestVersion) return;
+          final reactions = ref.read(localVideoReactionsProvider).value;
+          final accepted = local.where((tweet) =>
+              reactions?[tweet.id]?.value != -1).toList();
+          if (accepted.isNotEmpty) {
+            setState(() {
+              _results = accepted;
+              _usingCachedSearch = true;
+              _hasMore = false;
+              _cursor = null;
+              _error = null;
+            });
+            _warmupPlayers();
+            return;
+          }
+        } catch (_) {
+          // Keep the original error if the local database also fails.
+        }
+      }
+      if (mounted) {
+        setState(() => _error =
+          'Recherche en ligne indisponible. Vérifie la connexion ou '
+          'essaie de nouveau : $error');
+      }
     } finally {
       if (mounted && _searchVersion == requestVersion) {
         setState(() {
@@ -189,6 +227,7 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _poolScheduled = false;
       if (!mounted || _results.isEmpty) return;
+      ref.read(castPlaylistProvider.notifier).setQueue(_results);
       final pool = ref.read(playerPoolProvider.notifier);
       final active = <String>{};
       for (int i = _index - 1; i <= _index + 1; i++) {
@@ -338,6 +377,15 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
                           ],
                         ],
                       ),
+              ),
+            ),
+          if (_usingCachedSearch && !hideUi && hasVideos)
+            Positioned(
+              top: MediaQuery.paddingOf(context).top + 132,
+              left: 14,
+              child: const Chip(
+                avatar: Icon(Icons.offline_bolt_outlined, size: 16),
+                label: Text('Résultats enregistrés · hors ligne'),
               ),
             ),
           if (!hideUi)

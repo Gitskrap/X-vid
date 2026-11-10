@@ -57,6 +57,10 @@ class FeedState {
 
 class FeedNotifier extends AsyncNotifier<FeedState> {
   static int _publicSubscriptionOffset = 0;
+  final _discoveryCursorByTopic = <String, String?>{};
+  final _discoveryFromPublic = <String, bool>{};
+  final _discoverySeen = <String>{};
+  int _topicRotation = 0;
 
   /// Read-only fallback when X does not return videos for followed accounts.
   /// FxEmbed never receives the user's X cookies or tokens.
@@ -116,46 +120,74 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
       blockedHashtags: blockedHashtags,
     );
     if (topics.isEmpty) return const [];
-    final found = <String, Tweet>{};
-    final hasSession =
-        TwitterAccount.hasAuthSession(ref.read(accountProvider));
-    for (final topic in topics) {
-      if (!ref.mounted) break;
-      TweetResponse result = TweetResponse(tweets: []);
-      if (hasSession) {
+    final alreadySeen = await Repository.getViewedVideoIds();
+    if (!ref.mounted) return const [];
+    final accepted = <String, Tweet>{};
+    final authed = TwitterAccount.hasAuthSession(ref.read(accountProvider));
+    // Rotate which personal topic is queried first. Each topic keeps a
+    // pagination cursor, so successive loads don't fetch page one forever.
+    final rotated = [
+      ...topics.skip(_topicRotation % topics.length),
+      ...topics.take(_topicRotation % topics.length),
+    ];
+    _topicRotation++;
+    for (final topic in rotated) {
+      if (!ref.mounted) return const [];
+      var usePublic = _discoveryFromPublic[topic] ?? !authed;
+      var cursor = _discoveryCursorByTopic[topic];
+      TweetResponse response = TweetResponse(tweets: []);
+      if (!usePublic) {
         try {
-          result = await client.fetchTrendingMedia(
+          response = await client.fetchTrendingMedia(
             query: topic,
-            count: 20,
+            cursor: cursor,
+            sort: FeedSort.latest,
+            count: 35,
             filters: const {MediaFilter.video},
             timeoutSeconds: 9,
             reportErrors: true,
           ).timeout(const Duration(seconds: 11));
         } catch (error) {
-          AppLogger.log('Related X query unavailable: $error');
+          AppLogger.log('Discovery X query failed for $topic: $error');
+        }
+        if (response.tweets.isEmpty) {
+          usePublic = true;
+          cursor = null;
+          _discoveryFromPublic[topic] = true;
         }
       }
-      if (result.tweets.isEmpty) {
+      if (usePublic) {
         try {
-          result = await PublicXClient().searchVideos(topic, count: 20)
-              .timeout(const Duration(seconds: 10));
+          response = await PublicXClient()
+            .searchVideos(topic, cursor: cursor, count: 35)
+            .timeout(const Duration(seconds: 12));
         } catch (error) {
-          AppLogger.log('Related public query unavailable: $error');
+          AppLogger.log('Discovery public query failed for $topic: $error');
+          continue;
         }
       }
-      for (final video in result.tweets) {
+      final next = response.cursorBottom;
+      // A known exhausted cursor must not cause the same page to be
+      // fetched repeatedly in one feed session.
+      _discoveryCursorByTopic[topic] =
+          next != null && next.isNotEmpty && next != cursor ? next : null;
+      for (final video in response.tweets) {
         final author = video.userHandle.replaceFirst('@', '').toLowerCase();
         if (!video.isVideo || video.mediaUrls.isEmpty ||
             (video.durationMs != null && video.durationMs! <= 15000) ||
             localHandles.contains(author) ||
+            alreadySeen.contains(video.id) ||
+            _discoverySeen.contains(video.id) ||
             excludedByFeedback(video, reactions,
                 blockedHashtags: blockedHashtags)) continue;
-        found.putIfAbsent(video.id,
+        accepted.putIfAbsent(video.id,
             () => video.copyWith(source: 'Découverte'));
       }
-      if (found.length >= 5) break;
+      if (accepted.length >= 15) break;
     }
-    return found.values.take(5).toList();
+    _discoverySeen.addAll(accepted.keys);
+    // The next call searches new pages; do not repeat these candidates.
+    return accepted.values.take(15).toList();
   }
 
   // A bounded number of detailed X requests refreshes visible counters
@@ -343,7 +375,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
       // Stage 1: Immediate local candidate retrieval
       final localPool = await Repository.getCachedMediaCandidates(
         settings.loadBatchSize * settings.dbCandidateMultiplier,
-        avoidWatchedContent: settings.avoidWatchedContent,
+        avoidWatchedContent: true,
         filters: settings.filters,
         allowedHandles: allowedHandles,
       );
@@ -402,6 +434,8 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
         ref.read(hashtagListProvider).value ?? const <String>[];
     final allowedHandles = localVideoHandles(
         ref.read(subscriptionListProvider).allSubscriptions);
+    final viewedIds = await Repository.getViewedVideoIds();
+    if (!ref.mounted) return;
     // Recommendations can be derived from local likes, watch history and
     // hashtags even when the local subscription list is empty.
     debugPrint('XFLOW: Background refresh started');
@@ -434,7 +468,8 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
 
       if (!ref.mounted) return;
       final freshPool = filterByFeedback(
-          onlyLocalSubscriptionVideos(freshResponse.tweets, allowedHandles),
+          onlyLocalSubscriptionVideos(freshResponse.tweets, allowedHandles)
+              .where((video) => !viewedIds.contains(video.id)),
           reactions, blockedHashtags: blockedHashtags);
       final freshTagged = freshPool
           .map((t) => t.copyWith(source: 'API'))
@@ -450,7 +485,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
       // 2. Fetch local pool (now including fresh items)
       final localPool = await Repository.getCachedMediaCandidates(
         settings.loadBatchSize * settings.dbCandidateMultiplier,
-        avoidWatchedContent: settings.avoidWatchedContent,
+        avoidWatchedContent: true,
         filters: settings.filters,
         allowedHandles: allowedHandles,
       );
@@ -474,7 +509,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
           localTagged,
           settings,
           playedByUser,
-          protectedIndex: resetHead ? 0 : 2,
+          protectedIndex: resetHead ? 0 : current.tweets.length,
           currentTweets: resetHead ? [] :
               filterByFeedback(current.tweets, reactions,
                   blockedHashtags: blockedHashtags),
@@ -486,8 +521,12 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
                 reactions, followedHashtags, blockedHashtags)
             : <Tweet>[];
         if (!ref.mounted) return;
+        final present = processed.map((video) => video.id).toSet();
+        final unseenRelated = related.where((video) =>
+            !present.contains(video.id) && !viewedIds.contains(video.id))
+            .toList();
         final mixed = filterByFeedback(
-            mixRelatedVideos(processed, related), reactions,
+            mixRelatedVideos(processed, unseenRelated), reactions,
             blockedHashtags: blockedHashtags);
         state = AsyncData(current.copyWith(
           tweets: mixed,
@@ -543,7 +582,33 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
     state = AsyncData(currentState.copyWith(isLoadingMore: true));
 
     try {
+      // Request genuinely new recommendations first, before long and often
+      // exhausted subscription/API retry loops. This makes scroll-to-next
+      // responsive and prevents cache-only recycling.
+      if (settings.suggestSimilarVideos) {
+        final initialSuggestions = await _fetchRelatedVideos(
+          onlyLocalSubscriptionVideos(currentState.tweets, allowedHandles),
+          allowedHandles,
+          ref.read(twitterClientProvider),
+          reactions,
+          followedHashtags,
+          blockedHashtags,
+        );
+        if (!ref.mounted) return;
+        final present = currentState.tweets.map((t) => t.id).toSet();
+        final firstFresh = initialSuggestions
+            .where((t) => present.add(t.id))
+            .take(settings.loadBatchSize).toList();
+        if (firstFresh.length >= 3) {
+          state = AsyncData(currentState.copyWith(
+            tweets: [...currentState.tweets, ...firstFresh],
+            isLoadingMore: false,
+          ));
+          return;
+        }
+      }
       final seenIds = state.value!.tweets.map((t) => t.id).toSet();
+      final previouslyViewed = await Repository.getViewedVideoIds();
 
       // Use dynamic deduplication window from settings
       final dedupeWindow = state.value!.tweets.length >
@@ -572,7 +637,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
         // 1. Try to fetch from DB first (refresh pool)
         final dbCandidates = await Repository.getCachedMediaCandidates(
           settings.loadBatchSize * settings.dbCandidateMultiplier,
-          avoidWatchedContent: settings.avoidWatchedContent,
+          avoidWatchedContent: true,
           filters: settings.filters,
           allowedHandles: allowedHandles,
         );
@@ -583,6 +648,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
         ).where((t) {
           if (!t.isVideo || t.mediaUrls.isEmpty) return false;
           return !seenIds.contains(t.id) &&
+              !previouslyViewed.contains(t.id) &&
               (t.mediaUrls.isEmpty || !seenMedia.contains(t.mediaUrls.first));
         }).toList();
 
@@ -631,6 +697,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
           final freshUnique = localFresh.where((t) {
             if (!t.isVideo || t.mediaUrls.isEmpty) return false;
             return !seenIds.contains(t.id) &&
+                !previouslyViewed.contains(t.id) &&
                 (t.mediaUrls.isEmpty || !seenMedia.contains(t.mediaUrls.first));
           }).toList();
 
@@ -665,10 +732,8 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
         }
       }
 
-      if (allNewTweets.isEmpty) {
-        state = AsyncData(state.value!.copyWith(isLoadingMore: false));
-        return;
-      }
+      // Even if the subscriptions are exhausted, still search for new
+      // discoveries via likes, watched videos and followed hashtags.
 
       // Shuffle candidates BEFORE taking the batch to improve diversity
       allNewTweets.shuffle();
@@ -691,7 +756,11 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
             )
           : <Tweet>[];
       if (!ref.mounted) return;
-      final mixedNew = mixRelatedVideos(finalNewTweets, related);
+      final newIds = <String>{...seenIds, ...finalNewTweets.map((e) => e.id)};
+      final unseenRelated = related.where((video) =>
+          !newIds.contains(video.id) &&
+          !previouslyViewed.contains(video.id)).toList();
+      final mixedNew = mixRelatedVideos(finalNewTweets, unseenRelated);
       var combined = filterByFeedback(
           [...state.value!.tweets, ...mixedNew], reactions,
           blockedHashtags: blockedHashtags);

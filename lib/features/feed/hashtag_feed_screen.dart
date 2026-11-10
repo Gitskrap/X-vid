@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/navigation/navigation_provider.dart';
+import '../cast/cast_video_button.dart';
 import '../player/player_pool_provider.dart';
 import '../player/widgets/media_container.dart';
 import '../../core/models/tweet.dart';
@@ -277,6 +278,9 @@ class _HashtagMediaFeedScreenState
       final state = feedAsync.value;
       if (state == null) return;
       final tweets = state.tweets;
+      if (ref.read(navigationProvider).selectedHashtag == widget.hashtag) {
+        ref.read(castPlaylistProvider.notifier).setQueue(tweets);
+      }
 
       final pool = ref.read(playerPoolProvider.notifier);
       final activeIds = <String>{};
@@ -336,9 +340,23 @@ class _HashtagMediaFeedScreenState
             (tweet) => reactions?[tweet.id]?.value != -1,
           ).toList();
           if (tweets.isEmpty) {
-            return const Center(
-                child: Text('No media found',
-                    style: TextStyle(color: Colors.white70)));
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Aucune vidéo trouvée pour ce hashtag.',
+                    style: TextStyle(color: Colors.white70)),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: () => ref
+                      .read(hashtagMediaProvider(widget.hashtag).notifier)
+                      .refresh(),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Rechercher à nouveau'),
+                  ),
+                ],
+              ),
+            );
           }
 
           _managePool();
