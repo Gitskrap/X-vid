@@ -127,6 +127,7 @@ class MockSettingsNotifier extends SettingsNotifier {
     FeedSort? fetchStrategy,
     int? initialSyncCount,
     bool? strictSubscriptionsOnly,
+    bool? suggestSimilarVideos,
     bool? includeNativeRetweets,
     bool? useChunkedSubscriptions,
     int? saturationWindow,

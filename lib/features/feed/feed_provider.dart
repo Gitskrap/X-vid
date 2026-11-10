@@ -12,6 +12,7 @@ import '../../core/utils/app_logger.dart';
 import '../settings/settings_provider.dart';
 import '../subscriptions/subscription_list_screen.dart';
 import 'local_video_filter.dart';
+import 'similar_video_discovery.dart';
 import '../player/player_pool_provider.dart';
 
 final twitterClientProvider = Provider((ref) => TwitterClient());
@@ -83,6 +84,54 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
     return TweetResponse(tweets: videos.take(maxVideos).toList());
   }
 
+  /// Optional discovery: queries topics extracted from actual videos of
+  /// locally saved creators. Recommendations never modify the local follow list.
+  Future<List<Tweet>> _fetchRelatedVideos(
+    List<Tweet> examples,
+    Set<String> localHandles,
+    TwitterClient client,
+  ) async {
+    final topics = topicsFromSubscribedVideos(examples, limit: 2);
+    if (topics.isEmpty) return const [];
+    final found = <String, Tweet>{};
+    final hasSession =
+        TwitterAccount.hasAuthSession(ref.read(accountProvider));
+    for (final topic in topics) {
+      if (!ref.mounted) break;
+      TweetResponse result = TweetResponse(tweets: []);
+      if (hasSession) {
+        try {
+          result = await client.fetchTrendingMedia(
+            query: topic,
+            count: 20,
+            filters: const {MediaFilter.video},
+            timeoutSeconds: 9,
+            reportErrors: true,
+          ).timeout(const Duration(seconds: 11));
+        } catch (error) {
+          AppLogger.log('Related X query unavailable: $error');
+        }
+      }
+      if (result.tweets.isEmpty) {
+        try {
+          result = await PublicXClient().searchVideos(topic, count: 20)
+              .timeout(const Duration(seconds: 10));
+        } catch (error) {
+          AppLogger.log('Related public query unavailable: $error');
+        }
+      }
+      for (final video in result.tweets) {
+        final author = video.userHandle.replaceFirst('@', '').toLowerCase();
+        if (!video.isVideo || video.mediaUrls.isEmpty ||
+            localHandles.contains(author)) continue;
+        found.putIfAbsent(video.id,
+            () => video.copyWith(source: 'Découverte'));
+      }
+      if (found.length >= 5) break;
+    }
+    return found.values.take(5).toList();
+  }
+
   // A bounded number of detailed X requests refreshes visible counters
   // without rate-limiting every vertical swipe.
   final Map<String, DateTime> _checkedEngagementAt = {};
@@ -139,6 +188,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
       final previous = latest.tweets[index];
 
       final merged = previous.copyWith(
+        retrievedVia: fresh.retrievedVia,
         favoriteCount: fresh.favoriteCountKnown
             ? fresh.favoriteCount
             : previous.favoriteCount,
@@ -388,8 +438,14 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
           currentTweets: resetHead ? [] : current.tweets,
         );
 
+        final related = settings.suggestSimilarVideos
+            ? await _fetchRelatedVideos(
+                [...freshTagged, ...localTagged], allowedHandles, client)
+            : <Tweet>[];
+        if (!ref.mounted) return;
+        final mixed = mixRelatedVideos(processed, related);
         state = AsyncData(current.copyWith(
-          tweets: processed,
+          tweets: mixed,
           cursorBottom: freshResponse.cursorBottom,
           isRefreshing: false,
         ));
@@ -553,7 +609,17 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
           .map((t) => t.copyWith(source: t.source ?? 'Mixed'))
           .toList();
 
-      var combined = [...state.value!.tweets, ...finalNewTweets];
+      final related = settings.suggestSimilarVideos
+          ? await _fetchRelatedVideos(
+              onlyLocalSubscriptionVideos(
+                [...state.value!.tweets, ...finalNewTweets], allowedHandles),
+              allowedHandles,
+              ref.read(twitterClientProvider),
+            )
+          : <Tweet>[];
+      if (!ref.mounted) return;
+      final mixedNew = mixRelatedVideos(finalNewTweets, related);
+      var combined = [...state.value!.tweets, ...mixedNew];
 
       // Apply diversity enforcement to the new tail
       combined = DiscoveryEngine.applySaturation(
