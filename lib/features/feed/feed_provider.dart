@@ -15,6 +15,7 @@ import 'local_video_filter.dart';
 import 'similar_video_discovery.dart';
 import 'local_recommendation_profile.dart';
 import 'local_video_reactions_provider.dart';
+import 'hashtag_provider.dart';
 import '../../core/models/local_video_reaction.dart';
 import '../player/player_pool_provider.dart';
 
@@ -94,10 +95,16 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
     Set<String> localHandles,
     TwitterClient client,
     Map<String, LocalVideoReaction> reactions,
+    Iterable<String> followedHashtags,
   ) async {
-    // Liked clips have stronger influence than passive follows. Rejected
-    // captions/hashtags reduce suggestions, without POSTing any X likes.
-    final topics = personalizedVideoTopics(examples, reactions, limit: 3);
+    // Locally followed hashtags are explicit interests alongside subscriptions
+    // and likes. Dislikes prevent searching rejected themes.
+    final topics = personalizedVideoTopics(
+      examples,
+      reactions,
+      limit: 3,
+      followedHashtags: followedHashtags,
+    );
     if (topics.isEmpty) return const [];
     final found = <String, Tweet>{};
     final hasSession =
@@ -299,6 +306,10 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
     final settings = ref.watch(settingsProvider);
     final reactions = ref.watch(localVideoReactionsProvider).value ??
         const <String, LocalVideoReaction>{};
+    // Rebuild recommendations whenever a user follows/unfollows a hashtag.
+    // HashtagMediaNotifier does not watch this feed, so there is no provider
+    // dependency cycle at runtime.
+    ref.watch(hashtagListProvider);
     // The local list, not X's follow list, is the sole source of creators.
     final subscriptions = ref.watch(subscriptionListProvider);
     // Rebuild after login, switching accounts, or logout.
@@ -370,6 +381,8 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
     final settings = ref.read(settingsProvider);
     final reactions = ref.read(localVideoReactionsProvider).value ??
         const <String, LocalVideoReaction>{};
+    final followedHashtags =
+        ref.read(hashtagListProvider).value ?? const <String>[];
     final allowedHandles = localVideoHandles(
         ref.read(subscriptionListProvider).allSubscriptions);
     if (allowedHandles.isEmpty) {
@@ -454,7 +467,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
         final related = settings.suggestSimilarVideos
             ? await _fetchRelatedVideos(
                 [...freshTagged, ...localTagged], allowedHandles, client,
-                reactions)
+                reactions, followedHashtags)
             : <Tweet>[];
         if (!ref.mounted) return;
         final mixed = filterByFeedback(
@@ -483,6 +496,8 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
     final settings = ref.read(settingsProvider);
     final reactions = ref.read(localVideoReactionsProvider).value ??
         const <String, LocalVideoReaction>{};
+    final followedHashtags =
+        ref.read(hashtagListProvider).value ?? const <String>[];
     final allowedHandles = localVideoHandles(
         ref.read(subscriptionListProvider).allSubscriptions);
     if (allowedHandles.isEmpty) {
@@ -636,6 +651,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
               allowedHandles,
               ref.read(twitterClientProvider),
               reactions,
+              followedHashtags,
             )
           : <Tweet>[];
       if (!ref.mounted) return;
