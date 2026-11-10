@@ -69,11 +69,23 @@ List<String> personalizedVideoTopics(
   Iterable<Tweet> savedSubscriptionVideos,
   Map<String, LocalVideoReaction> reactions, {
   int limit = 3,
+  Iterable<String> followedHashtags = const <String>[],
 }) {
   final scores = <String, int>{};
   for (final topic in topicsFromSubscribedVideos(savedSubscriptionVideos,
       limit: 8)) {
     scores[topic] = (scores[topic] ?? 0) + 2;
+  }
+
+  // Explicitly followed hashtags are stronger than passive subscriptions.
+  // A negative reaction still overrides them below.
+  final distinctTags = <String>{};
+  for (final hashtag in followedHashtags) {
+    final topic = hashtag.trim().replaceFirst(RegExp(r'^#+'), '').toLowerCase();
+    if (RegExp(r'^[\wÀ-ÿ]{2,40}$').hasMatch(topic) &&
+        !_stopWords.contains(topic) && distinctTags.add(topic)) {
+      scores[topic] = (scores[topic] ?? 0) + 6;
+    }
   }
 
   final rejectedTags = <String>{};

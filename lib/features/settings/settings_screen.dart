@@ -348,11 +348,10 @@ class PlaybackSettingsPage extends ConsumerWidget {
           SwitchListTile(
             secondary: const Icon(Icons.auto_awesome_outlined),
             title: const Text('Vidéos similaires'),
-            subtitle: const Text('Proposer des vidéos proches des thèmes '
-                'de tes abonnements et de tes J’aime locaux, en évitant '
-                'les styles rejetés avec Je n’aime pas. '
-                'Les recherches de vidéos utilisent les mots-clés '
-                'des légendes et hashtags.'),
+            subtitle: const Text('Personnaliser les découvertes avec les '
+                'comptes suivis dans l’application, les hashtags enregistrés '
+                'dans l’onglet Hashtags et les J’aime locaux. '
+                'Les Je n’aime pas réduisent les styles rejetés.'),
             value: settings.suggestSimilarVideos,
             onChanged: (enabled) => notifier.updateDiscoveryParam(
               suggestSimilarVideos: enabled,
