@@ -694,9 +694,10 @@ class Repository {
     final db = await database;
     await db.rawUpdate('''
       UPDATE $tableCachedMedia
-      SET duration_watched = COALESCE(duration_watched, 0) + ?
+      SET duration_watched = COALESCE(duration_watched, 0) + ?,
+          last_played_at = ?
       WHERE id = ?
-    ''', [watchedSeconds, video.id]);
+    ''', [watchedSeconds, DateTime.now().millisecondsSinceEpoch, video.id]);
   }
 
   /// Recent meaningful watch history is used as a private topic signal.
