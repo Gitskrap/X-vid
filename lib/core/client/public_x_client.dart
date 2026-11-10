@@ -195,7 +195,7 @@ class PublicXClient {
         ? text : '$text filter:videos';
     final body = await _get(Uri.https(_host, '/2/search', {
       'q': filtered,
-      'feed': top ? 'top' : 'latest',
+      'feed': top ? 'top' : 'media',
       'count': count.clamp(1, 100).toString(),
       if (cursor?.isNotEmpty == true) 'cursor': cursor!,
     }));
