@@ -567,6 +567,7 @@ class _TiktokMediaContainerState extends ConsumerState<TiktokMediaContainer> {
           );
         },
       ),
+    );
       },
     );
   }
