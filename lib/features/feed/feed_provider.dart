@@ -645,69 +645,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
     }
   }
 
-  Future<void> toggleLike(String tweetId) async {
-    final currentState = state.value;
-    if (currentState == null) return;
 
-    final tweetIndex = currentState.tweets.indexWhere((t) => t.id == tweetId);
-    if (tweetIndex == -1) return;
-
-    final tweet = currentState.tweets[tweetIndex];
-    final newIsLiked = !tweet.isLiked;
-    final newFavoriteCount = tweet.favoriteCount + (newIsLiked ? 1 : -1);
-
-    // Optimistic UI Update
-    final updatedTweet = tweet.copyWith(
-      isLiked: newIsLiked,
-      favoriteCount: newFavoriteCount >= 0 ? newFavoriteCount : 0,
-    );
-
-    final updatedTweets = List<Tweet>.from(currentState.tweets);
-    updatedTweets[tweetIndex] = updatedTweet;
-    state = AsyncData(currentState.copyWith(tweets: updatedTweets));
-
-    // API Call
-    final client = ref.read(twitterClientProvider);
-    final success = newIsLiked
-        ? await client.favoriteTweet(tweetId)
-        : await client.unfavoriteTweet(tweetId);
-
-    if (!success) {
-      // Revert on failure
-      final currentAsync = ref.read(feedNotifierProvider);
-      if (currentAsync.hasValue) {
-        final latestState = currentAsync.value!;
-        final idx = latestState.tweets.indexWhere((t) => t.id == tweetId);
-        if (idx != -1) {
-          final revertedTweets = List<Tweet>.from(latestState.tweets);
-          revertedTweets[idx] = tweet; // original tweet
-          state = AsyncData(latestState.copyWith(tweets: revertedTweets));
-        }
-      }
-      AppLogger.log('XFLOW: Failed to toggle like for $tweetId, reverted.');
-    } else {
-      // X confirmed the action. Retain the state across app restarts without
-      // fabricating an absolute favorite count if X never supplied one.
-      final latest = state.value;
-      if (latest != null) {
-        final idx = latest.tweets.indexWhere((t) => t.id == tweetId);
-        if (idx >= 0) {
-          final confirmedTweet =
-              latest.tweets[idx].copyWith(isLikedKnown: true);
-          final list = List<Tweet>.from(latest.tweets);
-          list[idx] = confirmedTweet;
-          state = AsyncData(latest.copyWith(tweets: list));
-          try {
-            await Repository.insertCachedMedia([confirmedTweet]);
-          } catch (e) {
-            AppLogger.log('XFLOW: Could not cache confirmed like: $e');
-          }
-        }
-      }
-      AppLogger.log(
-          'XFLOW: Successfully toggled like for $tweetId to $newIsLiked');
-    }
-  }
 }
 
 final feedNotifierProvider =
