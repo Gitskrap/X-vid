@@ -282,7 +282,9 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
                         .hideDislikedVideo(tweets[index].id);
                     final remaining = ref.read(feedNotifierProvider)
                         .value?.tweets.length ?? 0;
-                    if (remaining > 0 && index >= remaining) {
+                    if (remaining == 0) {
+                      setState(() => _currentIndex = 0);
+                    } else if (index >= remaining) {
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         if (!mounted || !_pageController.hasClients) return;
                         _pageController.jumpToPage(remaining - 1);
