@@ -5,12 +5,14 @@ import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import 'entities.dart';
 import '../models/tweet.dart';
+import '../models/local_video_reaction.dart';
 import '../../features/settings/settings_provider.dart';
 
 const String tableAccounts = 'accounts';
 const String tableSubscriptions = 'subscriptions';
 const String tableCachedMedia = 'cached_media';
 const String tableHashtags = 'hashtags';
+const String tableLocalReactions = 'local_video_reactions';
 
 class Repository {
   static Database? _database;
@@ -30,7 +32,7 @@ class Repository {
     }
     return await openDatabase(
       path,
-      version: 11,
+      version: 12,
       onCreate: (db, version) async {
         await db.execute(
           'CREATE TABLE $tableAccounts (id TEXT PRIMARY KEY, screen_name TEXT, rest_id TEXT, auth_header TEXT)',
@@ -71,6 +73,15 @@ class Repository {
         await db.execute(
           'CREATE INDEX idx_suggested ON $tableCachedMedia (last_suggested_at)',
         );
+        await db.execute('''
+          CREATE TABLE $tableLocalReactions (
+            video_id TEXT PRIMARY KEY,
+            reaction INTEGER NOT NULL CHECK (reaction IN (-1, 1)),
+            caption TEXT NOT NULL,
+            author TEXT NOT NULL,
+            updated_at INTEGER NOT NULL
+          )
+        ''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -142,8 +153,63 @@ class Repository {
           await db.execute(
             'ALTER TABLE $tableCachedMedia ADD COLUMN retrieved_via TEXT');
         }
+        if (oldVersion < 12) {
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS $tableLocalReactions (
+              video_id TEXT PRIMARY KEY,
+              reaction INTEGER NOT NULL CHECK (reaction IN (-1, 1)),
+              caption TEXT NOT NULL,
+              author TEXT NOT NULL,
+              updated_at INTEGER NOT NULL
+            )
+          ''');
+        }
       },
     );
+  }
+
+  /// Independent local preferences, intentionally unrelated to X favourites.
+  static Future<Map<String, LocalVideoReaction>>
+      getLocalVideoReactions() async {
+    final db = await database;
+    final rows = await db.query(tableLocalReactions);
+    return {
+      for (final row in rows)
+        row['video_id'] as String: LocalVideoReaction(
+          videoId: row['video_id'] as String,
+          value: row['reaction'] as int,
+          caption: row['caption'] as String,
+          author: row['author'] as String,
+        ),
+    };
+  }
+
+  static Future<void> setLocalVideoReaction(Tweet tweet, int reaction) async {
+    if (reaction != -1 && reaction != 0 && reaction != 1) {
+      throw ArgumentError.value(reaction, 'reaction');
+    }
+    final db = await database;
+    if (reaction == 0) {
+      await db.delete(tableLocalReactions,
+          where: 'video_id = ?', whereArgs: [tweet.id]);
+      return;
+    }
+    await db.insert(
+      tableLocalReactions,
+      {
+        'video_id': tweet.id,
+        'reaction': reaction,
+        'caption': tweet.text,
+        'author': tweet.userHandle,
+        'updated_at': DateTime.now().millisecondsSinceEpoch,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  static Future<void> clearLocalVideoReactions() async {
+    final db = await database;
+    await db.delete(tableLocalReactions);
   }
 
   static Future<void> addHashtag(String tag) async {
