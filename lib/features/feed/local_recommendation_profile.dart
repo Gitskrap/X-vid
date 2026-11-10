@@ -15,7 +15,7 @@ const _stopWords = <String>{
   'posting', 'viral', 'latest', 'youtu', 'com',
 };
 
-Set<String> captionHashtags(String caption) => RegExp(r'#[\wÀ-ÿ]{3,30}')
+Set<String> captionHashtags(String caption) => RegExp(r'#[\wÀ-ÿ]{2,30}')
     .allMatches(caption)
     .map((match) => match.group(0)!.substring(1).toLowerCase())
     .where((word) => !_stopWords.contains(word))
