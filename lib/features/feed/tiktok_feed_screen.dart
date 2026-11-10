@@ -149,23 +149,51 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 10, 12, 0),
                 child: Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
-                      decoration: BoxDecoration(
-                        color: const Color(0xB814161A),
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: Colors.white24),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.play_circle_fill_rounded, color: Color(0xFF70F0CE), size: 20),
-                          SizedBox(width: 8),
-                          Text('Twitter vidéo', style: TextStyle(fontWeight: FontWeight.w700, letterSpacing: 0.2)),
-                        ],
+                    // The selected X session replaces the app branding.
+                    // The active session (used for likes/API calls) is not
+                    // necessarily the account that originally fetched a video.
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Tooltip(
+                          message: account == null
+                              ? 'Aucun compte X sélectionné'
+                              : 'Compte X actif : @${account.screenName.replaceFirst('@', '')}. '
+                                  'Les J’aime sont envoyés avec cette session.',
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 9),
+                            decoration: BoxDecoration(
+                              color: const Color(0xEB142621),
+                              borderRadius: BorderRadius.circular(22),
+                              border: Border.all(
+                                  color: const Color(0xFF70F0CE)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.account_circle_rounded,
+                                    color: Color(0xFF70F0CE), size: 19),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    account == null
+                                        ? 'Sans compte X'
+                                        : 'Session X : @${account.screenName.replaceFirst('@', '')}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w700),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                    const Spacer(),
                     IconButton(
                       tooltip: 'Rechercher des vidéos',
                       onPressed: () => ref.read(navigationProvider.notifier).openVideoSearch(),

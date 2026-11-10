@@ -9,7 +9,6 @@ import '../../../core/utils/app_logger.dart';
 import '../../../core/database/entities.dart';
 import '../../subscriptions/subscription_list_screen.dart';
 import '../feed_provider.dart';
-import '../../../core/client/account_provider.dart';
 import '../tweet_detail_screen.dart';
 
 class TweetTextOverlay extends ConsumerStatefulWidget {
@@ -41,17 +40,6 @@ class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
 
     return Stack(
       children: [
-        Positioned(
-          top: widget.isFullscreen
-              ? 12.0
-              : MediaQuery.paddingOf(context).top + 68.0,
-          left: 12,
-          right: widget.isFullscreen ? 120 : 90,
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: _buildCurrentAccountIndicator(),
-          ),
-        ),
         // Text Overlay (Bottom)
         Positioned(
           bottom: bottomPadding,
@@ -89,50 +77,6 @@ class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
           child: _buildActionButtons(),
         ),
       ],
-    );
-  }
-
-  /// The selected X session is independent from the source of each MP4.
-  /// An old cached video cannot be attributed to a newly selected account.
-  Widget _buildCurrentAccountIndicator() {
-    final account = ref.watch(accountProvider);
-    final handle = account?.screenName.replaceFirst('@', '');
-    final label = handle == null || handle.trim().isEmpty
-        ? 'Sans compte X'
-        : 'Session X : @$handle';
-    return Tooltip(
-      message: 'Compte X actuellement sélectionné pour les appels X. '
-          'Le lecteur vidéo ouvre directement le flux MP4, qui peut '
-          'provenir du cache ou du service public.',
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 250),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        decoration: BoxDecoration(
-          color: const Color(0xEB142621),
-          border: Border.all(color: const Color(0xFF70F0CE), width: 1),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.account_circle_rounded,
-                size: 18, color: Color(0xFF70F0CE)),
-            const SizedBox(width: 7),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
