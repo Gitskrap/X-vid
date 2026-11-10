@@ -116,37 +116,3 @@ List<String> personalizedVideoTopics(
     });
   return ranked.take(limit).map((entry) => entry.key).toList();
 }
-).hasMatch(topic) &&
-        !_stopWords.contains(topic)) {
-      scores[topic] = (scores[topic] ?? 0) + 6;
-    }
-  }
-
-  final rejectedTags = <String>{};
-  final rejectedWords = <String>{};
-  for (final feedback in reactions.values) {
-    if (feedback.value == -1) {
-      rejectedTags.addAll(captionHashtags(feedback.caption));
-      rejectedWords.addAll(captionKeywords(feedback.caption));
-    }
-  }
-  for (final feedback in reactions.values) {
-    if (feedback.value != 1) continue;
-    for (final tag in captionHashtags(feedback.caption)) {
-      scores[tag] = (scores[tag] ?? 0) + 8;
-    }
-    for (final word in captionKeywords(feedback.caption)) {
-      scores[word] = (scores[word] ?? 0) + 3;
-    }
-  }
-  // Rejected themes should not initiate new discovery requests.
-  scores.removeWhere((topic, score) =>
-      rejectedTags.contains(topic) ||
-      (rejectedWords.contains(topic) && score <= 8));
-  final ranked = scores.entries.toList()
-    ..sort((a, b) {
-      final byScore = b.value.compareTo(a.value);
-      return byScore == 0 ? a.key.compareTo(b.key) : byScore;
-    });
-  return ranked.take(limit).map((entry) => entry.key).toList();
-}
