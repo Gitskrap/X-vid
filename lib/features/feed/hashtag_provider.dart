@@ -136,7 +136,7 @@ class HashtagMediaNotifier extends AsyncNotifier<FeedState> {
   Future<void> fetchMore() async {
     final current = state.value;
     if (current == null || current.isLoadingMore ||
-        current.cursorBottom == null) return;
+        current.cursorBottom == null || current.cursorBottom!.isEmpty) return;
     state = AsyncData(current.copyWith(isLoadingMore: true));
     try {
       final response = await _search(
