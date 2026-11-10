@@ -5,12 +5,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_chrome_cast/flutter_chrome_cast.dart';
 
 import '../../core/models/tweet.dart';
+import '../feed/feed_provider.dart';
+import '../feed/local_recommendation_profile.dart';
+import '../feed/local_video_reactions_provider.dart';
+import '../feed/hashtag_blacklist_provider.dart';
+import 'cast_autoplay_queue.dart';
 import 'local_video_proxy.dart';
 import 'cast_quality.dart';
 import 'cast_volume_control.dart';
 
 /// The remote receiver fetches only MP4 bytes via an ephemeral LAN proxy.
 /// It receives no tweet text, cookies, account data or mirrored phone screen.
+/// The visible screen supplies its ordered queue. No videos are uploaded.
+final castPlaylistProvider = StateProvider<List<Tweet>>((ref) => const []);
+
 final activeCastTweetProvider =
     NotifierProvider<ActiveCastTweetNotifier, String?>(
   ActiveCastTweetNotifier.new,
@@ -18,7 +26,15 @@ final activeCastTweetProvider =
 
 class ActiveCastTweetNotifier extends Notifier<String?> {
   StreamSubscription<GoogleCastSession?>? _sessionSubscription;
+  StreamSubscription<GoggleCastMediaStatus?>? _mediaSubscription;
   LocalVideoCastProxy? _proxy;
+  GoogleCastDevice? _activeDevice;
+  CastQualityMode _activeQuality = CastQualityMode.auto;
+  List<Tweet> _playlist = const [];
+  final _castSessionIds = <String>{};
+  int? _currentMediaSessionId;
+  bool _advancing = false;
+  bool _stoppedByUser = false;
 
   /// Public Google-hosted MP4 for distinguishing connection failures from
   /// failures specific to Twitter's CDN, permissions or codecs.
@@ -30,6 +46,9 @@ class ActiveCastTweetNotifier extends Notifier<String?> {
   String? build() {
     ref.onDispose(() {
       _sessionSubscription?.cancel();
+      _mediaSubscription?.cancel();
+      _activeDevice = null;
+      _stoppedByUser = true;
       final proxy = _proxy;
       if (proxy != null) unawaited(proxy.close());
     });
@@ -46,6 +65,10 @@ class ActiveCastTweetNotifier extends Notifier<String?> {
         final hadActivePlayback = state != null;
         state = null;
         if (hadActivePlayback) {
+          _activeDevice = null;
+          _stoppedByUser = true;
+          _mediaSubscription?.cancel();
+          _mediaSubscription = null;
           final proxy = _proxy;
           _proxy = null;
           if (proxy != null) unawaited(proxy.close());
@@ -58,7 +81,16 @@ class ActiveCastTweetNotifier extends Notifier<String?> {
     Tweet tweet,
     GoogleCastDevice device, {
     CastQualityMode quality = CastQualityMode.auto,
+    bool automatic = false,
   }) async {
+    if (!automatic) {
+      _stoppedByUser = false;
+      _castSessionIds.clear();
+      final latestQueue = ref.read(castPlaylistProvider);
+      _playlist = latestQueue.any((t) => t.id == tweet.id)
+          ? List<Tweet>.from(latestQueue)
+          : [tweet, ...latestQueue];
+    }
     if (!tweet.isVideo || tweet.mediaUrls.isEmpty) {
       throw StateError('Cette publication ne comporte pas de vidéo.');
     }
@@ -80,6 +112,10 @@ class ActiveCastTweetNotifier extends Notifier<String?> {
     for (final candidate in candidates) {
       try {
         await _cast(device, candidate, tweetId: tweet.id);
+        _activeDevice = device;
+        _activeQuality = quality;
+        _castSessionIds.add(tweet.id);
+        _watchPlaybackCompletion();
         return;
       } catch (error) {
         lastError = error;
@@ -92,8 +128,95 @@ class ActiveCastTweetNotifier extends Notifier<String?> {
     );
   }
 
-  Future<void> playTest(GoogleCastDevice device) =>
-      _cast(device, testVideo, tweetId: null);
+  Future<void> playTest(GoogleCastDevice device) async {
+    _stoppedByUser = false;
+    _castSessionIds.clear();
+    _mediaSubscription?.cancel();
+    _mediaSubscription = null;
+    await _cast(device, testVideo, tweetId: null);
+  }
+
+  /// React only to a genuine end-of-media status: pause, buffering and
+  /// user-requested STOP are not "next video" signals.
+  void _watchPlaybackCompletion() {
+    _mediaSubscription ??=
+      GoogleCastRemoteMediaClient.instance.mediaStatusStream.listen((status) {
+        if (_stoppedByUser || _advancing || state == null ||
+            state == '__diagnostic__' || status == null) return;
+        if (status.playerState == CastMediaPlayerState.playing) {
+          _currentMediaSessionId = status.mediaSessionID;
+          return;
+        }
+        if (status.idleReason?.name.toLowerCase() != 'finished') return;
+        if (_currentMediaSessionId != null &&
+            status.mediaSessionID != _currentMediaSessionId) return;
+        _advancing = true;
+        unawaited(_playNextAutomatically().whenComplete(() {
+          _advancing = false;
+        }));
+      });
+  }
+
+  Future<void> _playNextAutomatically() async {
+    final finishedId = state;
+    final device = _activeDevice;
+    if (finishedId == null || device == null || _stoppedByUser) return;
+
+    final currentQueue = ref.read(castPlaylistProvider);
+    if (currentQueue.any((item) => item.id == finishedId)) {
+      _playlist = List<Tweet>.from(currentQueue);
+    }
+    var next = nextCastVideo(finishedId, _playlist, _castSessionIds);
+    if (next == null) {
+      // Last clip: try to discover more videos in the app feed. Never loop
+      // the finished clip, and never terminate the Cast session implicitly.
+      try {
+        await ref.read(feedNotifierProvider.notifier)
+            .fetchMore().timeout(const Duration(seconds: 30));
+        if (!ref.mounted || _stoppedByUser) return;
+        final newFeed = ref.read(feedNotifierProvider).value?.tweets ?? const <Tweet>[];
+        final candidates = newFeed.where((item) =>
+          !(_castSessionIds.contains(item.id)) &&
+          item.isVideo && item.mediaUrls.isNotEmpty &&
+          (item.durationMs == null || item.durationMs! > 15000)).toList();
+        if (candidates.isNotEmpty) {
+          next = candidates.first;
+          _playlist = [
+            ..._playlist,
+            ...candidates.where((item) =>
+                !_playlist.any((old) => old.id == item.id)),
+          ];
+        }
+      } catch (error) {
+        debugPrint('Cast: no new videos could be loaded: $error');
+      }
+    }
+    if (next == null || !ref.mounted || _stoppedByUser) return;
+    final reactions = ref.read(localVideoReactionsProvider).value;
+    final blocked = ref.read(hashtagBlacklistProvider).value ?? const <String>[];
+    var candidate = next;
+    var attempts = 0;
+    while (attempts < 4 && !_stoppedByUser && ref.mounted) {
+      attempts++;
+      if (excludedByFeedback(candidate, reactions ?? const {},
+          blockedHashtags: blocked)) {
+        _castSessionIds.add(candidate.id);
+      } else {
+        try {
+          await play(candidate, device, quality: _activeQuality,
+              automatic: true);
+          return;
+        } catch (error) {
+          debugPrint('Cast: next video ${candidate.id} failed: $error');
+          _castSessionIds.add(candidate.id);
+        }
+      }
+      final following = nextCastVideo(
+        finishedId, _playlist, _castSessionIds);
+      if (following == null) return;
+      candidate = following;
+    }
+  }
 
   Future<void> _cast(
     GoogleCastDevice device,
@@ -203,10 +326,17 @@ class ActiveCastTweetNotifier extends Notifier<String?> {
       return status.playerState == CastMediaPlayerState.playing;
     });
 
+    _currentMediaSessionId = client.mediaStatus?.mediaSessionID;
     state = tweetId ?? '__diagnostic__';
   }
 
   Future<void> stop() async {
+    _stoppedByUser = true;
+    _mediaSubscription?.cancel();
+    _mediaSubscription = null;
+    _activeDevice = null;
+    _playlist = const [];
+    _castSessionIds.clear();
     try {
       await GoogleCastSessionManager.instance.endSessionAndStopCasting();
     } finally {
@@ -228,7 +358,7 @@ class CastVideoButton extends ConsumerWidget {
     _initializing ??= GoogleCastContext.instance.setSharedInstanceWithOptions(
       GoogleCastOptionsAndroid(
         appId: GoogleCastDiscoveryCriteria.kDefaultApplicationId,
-        stopCastingOnAppTerminated: false,
+        stopCastingOnAppTerminated: true,
       ),
     );
     try {
