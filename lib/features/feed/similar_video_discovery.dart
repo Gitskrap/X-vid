@@ -52,10 +52,21 @@ List<Tweet> mixRelatedVideos(
   List<Tweet> recommendations, {
   int interval = 3,
 }) {
-  if (subscriptions.isEmpty || recommendations.isEmpty) return subscriptions;
+  if (recommendations.isEmpty) return subscriptions;
+  if (subscriptions.isEmpty) {
+    // Without locally followed creators, explicit likes, meaningful watches
+    // and saved hashtags can still populate the videos feed.
+    final seen = <String>{};
+    return recommendations.where((video) =>
+        video.isVideo && video.mediaUrls.isNotEmpty &&
+        (video.durationMs == null || video.durationMs! > 15000) &&
+        seen.add(video.id)).take(12)
+        .map((video) => video.copyWith(source: 'Découverte')).toList();
+  }
   final seen = subscriptions.map((t) => t.id).toSet();
   final suggested = recommendations
-      .where((t) => t.isVideo && t.mediaUrls.isNotEmpty && seen.add(t.id))
+      .where((t) => t.isVideo && t.mediaUrls.isNotEmpty &&
+          (t.durationMs == null || t.durationMs! > 15000) && seen.add(t.id))
       .toList();
   if (suggested.isEmpty) return subscriptions;
   final output = <Tweet>[];
