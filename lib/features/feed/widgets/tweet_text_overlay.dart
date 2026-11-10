@@ -8,21 +8,20 @@ import '../../../core/navigation/navigation_provider.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../core/database/entities.dart';
 import '../../subscriptions/subscription_list_screen.dart';
-import '../feed_provider.dart';
+import 'package:flutter/foundation.dart';
+import '../local_video_reactions_provider.dart';
 import '../tweet_detail_screen.dart';
 
 class TweetTextOverlay extends ConsumerStatefulWidget {
   final Tweet tweet;
   final VoidCallback? onFullscreen;
   final bool isFullscreen;
-  final Future<void> Function(String tweetId)? onLike;
 
   const TweetTextOverlay({
     super.key,
     required this.tweet,
     this.onFullscreen,
     this.isFullscreen = false,
-    this.onLike,
   });
 
   @override
@@ -131,59 +130,49 @@ class _TweetTextOverlayState extends ConsumerState<TweetTextOverlay> {
   }
 
   Widget _buildActionButtons() {
+    final reaction = ref.watch(localVideoReactionsProvider).value
+        ?[widget.tweet.id]?.value ?? 0;
+    Future<void> record(int value) async {
+      try {
+        await ref.read(localVideoReactionsProvider.notifier)
+            .toggle(widget.tweet, value);
+      } catch (error) {
+        debugPrint('Unable to save local reaction: $error');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text(
+              'Impossible d’enregistrer ton choix sur le téléphone.')),
+          );
+        }
+      }
+    }
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         _ActionButton(
-          icon: widget.tweet.isLiked ? Icons.favorite : Icons.favorite_border,
-          color: widget.tweet.isLiked ? Colors.red : Colors.white,
-          label: widget.tweet.favoriteCountKnown
-              ? _formatCount(widget.tweet.favoriteCount)
-              : '—',
-          onTap: () async {
-            if (widget.onLike != null) {
-              await widget.onLike!(widget.tweet.id);
-              return;
-            }
-            if (!widget.tweet.isLikedKnown ||
-                !widget.tweet.favoriteCountKnown) {
-              final updated = await ref
-                  .read(feedNotifierProvider.notifier)
-                  .refreshVisibleEngagement(widget.tweet.id, force: true);
-              final latest = ref.read(feedNotifierProvider).value?.tweets
-                  .where((t) => t.id == widget.tweet.id)
-                  .firstOrNull;
-              if (!updated || latest == null || !latest.isLikedKnown) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Impossible de vérifier les likes auprès de X. '
-                        'Réessaie après avoir connecté ton compte.',
-                      ),
-                    ),
-                  );
-                }
-                return;
-              }
-            }
-            await ref.read(feedNotifierProvider.notifier)
-                .toggleLike(widget.tweet.id);
-          },
+          icon: reaction == 1 ? Icons.favorite : Icons.favorite_border,
+          color: reaction == 1 ? const Color(0xFFFF637E) : Colors.white,
+          label: 'J’aime',
+          onTap: () => record(1),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 7),
+        _ActionButton(
+          icon: reaction == -1
+              ? Icons.thumb_down_rounded : Icons.thumb_down_outlined,
+          color: reaction == -1 ? const Color(0xFFFFB47E) : Colors.white,
+          label: 'Pas pour moi',
+          onTap: () => record(-1),
+        ),
+        const SizedBox(height: 7),
         _ActionButton(
           icon: Icons.chat_bubble_outline,
           label: widget.tweet.replyCountKnown
               ? _formatCount(widget.tweet.replyCount)
               : '—',
-          onTap: () {
-            TweetRepliesSheet.show(context, widget.tweet);
-          },
+          onTap: () => TweetRepliesSheet.show(context, widget.tweet),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 7),
         CastVideoButton(tweet: widget.tweet),
-
       ],
     );
   }
