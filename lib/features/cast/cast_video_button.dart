@@ -17,7 +17,19 @@ import 'cast_volume_control.dart';
 /// The remote receiver fetches only MP4 bytes via an ephemeral LAN proxy.
 /// It receives no tweet text, cookies, account data or mirrored phone screen.
 /// The visible screen supplies its ordered queue. No videos are uploaded.
-final castPlaylistProvider = StateProvider<List<Tweet>>((ref) => const []);
+class CastPlaylistNotifier extends Notifier<List<Tweet>> {
+  @override
+  List<Tweet> build() => const [];
+
+  void setQueue(List<Tweet> tweets) {
+    state = List<Tweet>.unmodifiable(tweets);
+  }
+}
+
+final castPlaylistProvider =
+    NotifierProvider<CastPlaylistNotifier, List<Tweet>>(
+  CastPlaylistNotifier.new,
+);
 
 final activeCastTweetProvider =
     NotifierProvider<ActiveCastTweetNotifier, String?>(
