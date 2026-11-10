@@ -56,6 +56,7 @@ class _TiktokMediaContainerState extends ConsumerState<TiktokMediaContainer> {
   int _watchedMs = 0;
   bool _watchRecorded = false;
   int? _resolvedDurationMs;
+  int? _persistedDurationMs;
   Timer? _durationValidationTimer;
   bool _shortSkipped = false;
 
@@ -117,6 +118,7 @@ class _TiktokMediaContainerState extends ConsumerState<TiktokMediaContainer> {
       _watchedMs = 0;
       _watchRecorded = false;
       _resolvedDurationMs = null;
+      _persistedDurationMs = null;
       _shortSkipped = false;
       _retryCount = 0;
     }
@@ -291,13 +293,11 @@ class _TiktokMediaContainerState extends ConsumerState<TiktokMediaContainer> {
 
         _durationValidationTimer?.cancel();
         _durationValidationTimer = null;
-        if (actualMs > 0 && widget.tweet.durationMs != actualMs) {
-          // Fire once per measured duration; the cache may not yet contain
-          // public suggestions, which are inserted after a meaningful watch.
-          if (_resolvedDurationMs != widget.tweet.durationMs) {
-            unawaited(Repository.saveResolvedVideoDuration(
-                widget.tweet.id, actualMs));
-          }
+        if (actualMs > 0 && widget.tweet.durationMs != actualMs &&
+            _persistedDurationMs != actualMs) {
+          _persistedDurationMs = actualMs;
+          unawaited(Repository.saveResolvedVideoDuration(
+              widget.tweet.id, actualMs));
         }
         final shouldPlay = widget.isVisible && settings.autoplay;
         if (instance.player.state.playing != shouldPlay) {
