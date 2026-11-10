@@ -226,6 +226,8 @@ class _VideoSearchScreenState extends ConsumerState<VideoSearchScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _poolScheduled = false;
       if (!mounted || _results.isEmpty) return;
+      ref.read(castPlaylistProvider.notifier).state =
+          List<Tweet>.unmodifiable(_results);
       final pool = ref.read(playerPoolProvider.notifier);
       final active = <String>{};
       for (int i = _index - 1; i <= _index + 1; i++) {
