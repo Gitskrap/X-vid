@@ -16,6 +16,7 @@ import 'similar_video_discovery.dart';
 import 'local_recommendation_profile.dart';
 import 'local_video_reactions_provider.dart';
 import 'hashtag_provider.dart';
+import 'hashtag_blacklist_provider.dart';
 import '../../core/models/local_video_reaction.dart';
 import '../player/player_pool_provider.dart';
 
@@ -99,6 +100,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
     TwitterClient client,
     Map<String, LocalVideoReaction> reactions,
     Iterable<String> followedHashtags,
+    Set<String> blockedHashtags,
   ) async {
     // All four sources influence recommendations: explicit likes, videos
     // meaningfully watched, followed hashtags, and locally saved creators.
@@ -111,6 +113,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
       limit: 4,
       followedHashtags: followedHashtags,
       watchedVideos: watched,
+      blockedHashtags: blockedHashtags,
     );
     if (topics.isEmpty) return const [];
     final found = <String, Tweet>{};
@@ -145,7 +148,8 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
         if (!video.isVideo || video.mediaUrls.isEmpty ||
             (video.durationMs != null && video.durationMs! <= 15000) ||
             localHandles.contains(author) ||
-            excludedByFeedback(video, reactions)) continue;
+            excludedByFeedback(video, reactions,
+                blockedHashtags: blockedHashtags)) continue;
         found.putIfAbsent(video.id,
             () => video.copyWith(source: 'Découverte'));
       }
@@ -312,8 +316,12 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
   @override
   FutureOr<FeedState> build() async {
     final settings = ref.watch(settingsProvider);
-    final reactions = ref.watch(localVideoReactionsProvider).value ??
+    // Do not rebuild the entire asynchronous feed when tapping like/dislike:
+    // it previously displayed a loading spinner and interrupted playback.
+    final reactions = ref.read(localVideoReactionsProvider).value ??
         const <String, LocalVideoReaction>{};
+    final blockedHashtags = ref.watch(hashtagBlacklistProvider).value
+        ?.toSet() ?? const <String>{};
     // Rebuild recommendations whenever a user follows/unfollows a hashtag.
     // HashtagMediaNotifier does not watch this feed, so there is no provider
     // dependency cycle at runtime.
@@ -341,6 +349,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
       );
       final localTagged = filterByFeedback(
         onlyLocalSubscriptionVideos(localPool, allowedHandles), reactions,
+        blockedHashtags: blockedHashtags,
       ).map((t) => t.copyWith(source: 'Cache')).toList();
       AppLogger.log(
           'XFLOW: Cold start: Retrieved ${localPool.length} local candidates');
@@ -387,6 +396,8 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
     final settings = ref.read(settingsProvider);
     final reactions = ref.read(localVideoReactionsProvider).value ??
         const <String, LocalVideoReaction>{};
+    final blockedHashtags = ref.read(hashtagBlacklistProvider).value
+        ?.toSet() ?? const <String>{};
     final followedHashtags =
         ref.read(hashtagListProvider).value ?? const <String>[];
     final allowedHandles = localVideoHandles(
@@ -424,7 +435,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
       if (!ref.mounted) return;
       final freshPool = filterByFeedback(
           onlyLocalSubscriptionVideos(freshResponse.tweets, allowedHandles),
-          reactions);
+          reactions, blockedHashtags: blockedHashtags);
       final freshTagged = freshPool
           .map((t) => t.copyWith(source: 'API'))
           .toList();
@@ -445,6 +456,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
       );
       final localTagged = filterByFeedback(
         onlyLocalSubscriptionVideos(localPool, allowedHandles), reactions,
+        blockedHashtags: blockedHashtags,
       ).map((t) => t.copyWith(source: 'Cache')).toList();
 
       final currentAsync = ref.read(feedNotifierProvider);
@@ -464,7 +476,8 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
           playedByUser,
           protectedIndex: resetHead ? 0 : 2,
           currentTweets: resetHead ? [] :
-              filterByFeedback(current.tweets, reactions),
+              filterByFeedback(current.tweets, reactions,
+                  blockedHashtags: blockedHashtags),
         );
 
         final related = settings.suggestSimilarVideos
@@ -474,7 +487,8 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
             : <Tweet>[];
         if (!ref.mounted) return;
         final mixed = filterByFeedback(
-            mixRelatedVideos(processed, related), reactions);
+            mixRelatedVideos(processed, related), reactions,
+            blockedHashtags: blockedHashtags);
         state = AsyncData(current.copyWith(
           tweets: mixed,
           cursorBottom: freshResponse.cursorBottom,
@@ -499,6 +513,8 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
     final settings = ref.read(settingsProvider);
     final reactions = ref.read(localVideoReactionsProvider).value ??
         const <String, LocalVideoReaction>{};
+    final blockedHashtags = ref.read(hashtagBlacklistProvider).value
+        ?.toSet() ?? const <String>{};
     final followedHashtags =
         ref.read(hashtagListProvider).value ?? const <String>[];
     final allowedHandles = localVideoHandles(
@@ -514,7 +530,8 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
       if (!ref.mounted) return;
       final seen = currentState.tweets.map((t) => t.id).toSet();
       final additional = filterByFeedback(
-          suggestions.where((video) => seen.add(video.id)), reactions);
+          suggestions.where((video) => seen.add(video.id)), reactions,
+          blockedHashtags: blockedHashtags);
       state = AsyncData(currentState.copyWith(
         tweets: [...currentState.tweets, ...additional],
         isLoadingMore: false,
@@ -561,7 +578,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
 
         var localNew = filterByFeedback(
           onlyLocalSubscriptionVideos(dbCandidates, allowedHandles),
-          reactions,
+          reactions, blockedHashtags: blockedHashtags,
         ).where((t) {
           if (!t.isVideo || t.mediaUrls.isEmpty) return false;
           return !seenIds.contains(t.id) &&
@@ -609,7 +626,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
 
           final localFresh = filterByFeedback(
               onlyLocalSubscriptionVideos(effectiveResponse.tweets,
-                  allowedHandles), reactions);
+                  allowedHandles), reactions, blockedHashtags: blockedHashtags);
           final freshUnique = localFresh.where((t) {
             if (!t.isVideo || t.mediaUrls.isEmpty) return false;
             return !seenIds.contains(t.id) &&
@@ -656,7 +673,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
       allNewTweets.shuffle();
 
       final finalNewTweets = filterByFeedback(
-          allNewTweets, reactions)
+          allNewTweets, reactions, blockedHashtags: blockedHashtags)
           .take(settings.loadBatchSize)
           .map((t) => t.copyWith(source: t.source ?? 'Mixed'))
           .toList();
@@ -674,7 +691,8 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
       if (!ref.mounted) return;
       final mixedNew = mixRelatedVideos(finalNewTweets, related);
       var combined = filterByFeedback(
-          [...state.value!.tweets, ...mixedNew], reactions);
+          [...state.value!.tweets, ...mixedNew], reactions,
+          blockedHashtags: blockedHashtags);
 
       // Apply diversity enforcement to the new tail
       combined = DiscoveryEngine.applySaturation(
