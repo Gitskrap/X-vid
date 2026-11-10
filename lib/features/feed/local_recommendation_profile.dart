@@ -12,7 +12,7 @@ const _stopWords = <String>{
   'what', 'when', 'where', 'pourquoi', 'merci', 'bonjour', 'because',
   'here', 'there', 'part', 'dont', 'about', 'the', 'and', 'regarde',
   'regardez', 'voir', 'bien', 'bonne', 'great', 'fresh', 'original',
-  'posting', 'viral', 'latest', 'https', 'youtu', 'twitter', 'com',
+  'posting', 'viral', 'latest', 'youtu', 'com',
 };
 
 Set<String> captionHashtags(String caption) => RegExp(r'#[\wÀ-ÿ]{3,30}')
