@@ -7,6 +7,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import '../../../core/models/tweet.dart';
+import '../../../core/database/repository.dart';
 import '../../../core/utils/media_cache_manager.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../feed/widgets/text_tweet_card.dart';
@@ -20,6 +21,8 @@ class TiktokMediaContainer extends ConsumerStatefulWidget {
   final Tweet tweet;
   final bool isVisible;
   final bool autoFullscreen;
+  /// Only the home Videos tab enforces the 15-second minimum.
+  final bool requireLongVideo;
   final Widget Function(
           BuildContext context, VoidCallback? onFullscreen, bool isFullscreen)?
       overlayBuilder;
@@ -30,6 +33,7 @@ class TiktokMediaContainer extends ConsumerStatefulWidget {
     required this.tweet,
     required this.isVisible,
     this.autoFullscreen = false,
+    this.requireLongVideo = false,
     this.overlayBuilder,
     this.onPlaybackError,
   });
@@ -46,6 +50,56 @@ class _TiktokMediaContainerState extends ConsumerState<TiktokMediaContainer> {
   bool _isAutoFullscreenDone = false;
   StreamSubscription? _errorSubscription;
   StreamSubscription? _completedSubscription;
+  StreamSubscription<Duration>? _watchPositionSubscription;
+  Player? _watchedPlayer;
+  Duration? _previousWatchPosition;
+  int _watchedMs = 0;
+  bool _watchRecorded = false;
+  int? _resolvedDurationMs;
+  Timer? _durationValidationTimer;
+  bool _shortSkipped = false;
+
+  void _skipShortOrUnknownVideo() {
+    if (!mounted || !widget.isVisible || _shortSkipped) return;
+    _shortSkipped = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.isVisible) widget.onPlaybackError?.call();
+    });
+  }
+
+  void _trackActualWatchTime(Player player) {
+    if (identical(_watchedPlayer, player)) return;
+    _watchPositionSubscription?.cancel();
+    _watchedPlayer = player;
+    _watchedMs = 0;
+    _previousWatchPosition = null;
+    _watchRecorded = false;
+    _watchPositionSubscription = player.stream.position.listen((position) {
+      if (!mounted || !widget.isVisible || !player.state.playing ||
+          _watchRecorded) {
+        _previousWatchPosition = position;
+        return;
+      }
+      final durationMs = _resolvedDurationMs ??
+          widget.tweet.durationMs ?? player.state.duration.inMilliseconds;
+      if (durationMs <= 15000) {
+        _previousWatchPosition = position;
+        return;
+      }
+      final delta = _previousWatchPosition == null
+          ? 0
+          : position.inMilliseconds - _previousWatchPosition!.inMilliseconds;
+      _previousWatchPosition = position;
+      // Count only contiguous actual playback: seeking doesn't fake watching.
+      if (delta > 0 && delta <= 2000) _watchedMs += delta;
+      if (_watchedMs >= 7000) {
+        _watchRecorded = true;
+        final watched = widget.tweet.copyWith(durationMs: durationMs);
+        unawaited(Repository.recordMeaningfulVideoWatch(
+            watched, watchedSeconds: 7));
+      }
+    });
+  }
 
   @override
   void didUpdateWidget(TiktokMediaContainer oldWidget) {
@@ -53,12 +107,29 @@ class _TiktokMediaContainerState extends ConsumerState<TiktokMediaContainer> {
     if (oldWidget.tweet.id != widget.tweet.id) {
       _errorSubscription?.cancel();
       _completedSubscription?.cancel();
+      _watchPositionSubscription?.cancel();
+      _durationValidationTimer?.cancel();
       _errorSubscription = null;
       _completedSubscription = null;
+      _watchPositionSubscription = null;
+      _watchedPlayer = null;
+      _previousWatchPosition = null;
+      _watchedMs = 0;
+      _watchRecorded = false;
+      _resolvedDurationMs = null;
+      _shortSkipped = false;
       _retryCount = 0;
     }
     if (!oldWidget.isVisible && widget.isVisible) {
       _isAutoFullscreenDone = false;
+      _shortSkipped = false;
+      _previousWatchPosition = null;
+      _watchedMs = 0;
+    } else if (oldWidget.isVisible && !widget.isVisible) {
+      _durationValidationTimer?.cancel();
+      _durationValidationTimer = null;
+      _previousWatchPosition = null;
+      _watchedMs = 0;
     }
   }
 
@@ -66,6 +137,8 @@ class _TiktokMediaContainerState extends ConsumerState<TiktokMediaContainer> {
   void dispose() {
     _errorSubscription?.cancel();
     _completedSubscription?.cancel();
+    _watchPositionSubscription?.cancel();
+    _durationValidationTimer?.cancel();
     super.dispose();
   }
 
@@ -183,18 +256,62 @@ class _TiktokMediaContainerState extends ConsumerState<TiktokMediaContainer> {
 
     final settings = ref.watch(settingsProvider);
     final videoUiHidden = ref.watch(videoUiHiddenProvider);
-    final shouldPlay = widget.isVisible && settings.autoplay;
-    if (instance.player.state.playing != shouldPlay) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        final nowShouldPlay = widget.isVisible && ref.read(settingsProvider).autoplay;
-        if (nowShouldPlay && !instance.player.state.playing) {
-          instance.player.play();
-        } else if (!nowShouldPlay && instance.player.state.playing) {
-          instance.player.pause();
+    _trackActualWatchTime(instance.player);
+    return StreamBuilder<Duration>(
+      stream: instance.player.stream.duration,
+      initialData: instance.player.state.duration,
+      builder: (context, durationSnapshot) {
+        final actualMs = (durationSnapshot.data ?? Duration.zero).inMilliseconds;
+        if (actualMs > 0) _resolvedDurationMs = actualMs;
+        final durationMs = actualMs > 0 ? actualMs : widget.tweet.durationMs;
+        final isValidatedLong = !widget.requireLongVideo ||
+            (durationMs != null && durationMs > 15000);
+
+        if (widget.requireLongVideo && !isValidatedLong) {
+          if (durationMs != null && durationMs > 0 &&
+              durationMs <= 15000) {
+            _durationValidationTimer?.cancel();
+            _durationValidationTimer = null;
+            _skipShortOrUnknownVideo();
+          } else if (widget.isVisible && _durationValidationTimer == null) {
+            // Unknown durations are not allowed through on faith. Give
+            // media_kit time to probe the file, otherwise skip it.
+            _durationValidationTimer = Timer(const Duration(seconds: 12), () {
+              _durationValidationTimer = null;
+              _skipShortOrUnknownVideo();
+            });
+          }
+          if (instance.player.state.playing) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) unawaited(instance.player.pause());
+            });
+          }
+          return const Center(child: CircularProgressIndicator());
         }
-      });
-    }
+
+        _durationValidationTimer?.cancel();
+        _durationValidationTimer = null;
+        if (actualMs > 0 && widget.tweet.durationMs != actualMs) {
+          // Fire once per measured duration; the cache may not yet contain
+          // public suggestions, which are inserted after a meaningful watch.
+          if (_resolvedDurationMs != widget.tweet.durationMs) {
+            unawaited(Repository.saveResolvedVideoDuration(
+                widget.tweet.id, actualMs));
+          }
+        }
+        final shouldPlay = widget.isVisible && settings.autoplay;
+        if (instance.player.state.playing != shouldPlay) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            final nowShouldPlay =
+                widget.isVisible && ref.read(settingsProvider).autoplay;
+            if (nowShouldPlay && !instance.player.state.playing) {
+              unawaited(instance.player.play());
+            } else if (!nowShouldPlay && instance.player.state.playing) {
+              unawaited(instance.player.pause());
+            }
+          });
+        }
     return PopScope(
       canPop: true,
       onPopInvokedWithResult: (didPop, result) async {
@@ -450,6 +567,7 @@ class _TiktokMediaContainerState extends ConsumerState<TiktokMediaContainer> {
           );
         },
       ),
+      },
     );
   }
 
