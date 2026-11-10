@@ -27,7 +27,7 @@ jobs:
       - name: Analyze app
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
       - name: Test timestamp and engagement parsing
-        run: flutter test test/core/utils/date_utils_test.dart test/core/utils/engagement_utils_test.dart test/core/database/engagement_cache_test.dart test/features/cast/cast_quality_test.dart test/features/search/video_search_utils_test.dart test/core/client/twitter_account_test.dart test/features/subscriptions/subscription_handle_test.dart test/core/client/public_x_client_test.dart test/features/subscriptions/subscription_updates_test.dart test/features/feed/local_video_filter_test.dart test/core/database/retrieval_source_test.dart test/features/feed/similar_video_discovery_test.dart test/features/player/video_seek_bar_test.dart test/core/database/local_video_reactions_test.dart test/features/feed/local_recommendation_profile_test.dart test/features/feed/x_like_counter_test.dart test/features/feed/followed_hashtag_recommendations_test.dart test/features/feed/video_long_only_test.dart test/core/database/watched_video_recommendations_test.dart test/features/feed/hashtag_blacklist_test.dart test/features/feed/dislike_immediate_test.dart test/features/player/video_audio_provider_test.dart
+        run: flutter test test/core/utils/date_utils_test.dart test/core/utils/engagement_utils_test.dart test/core/database/engagement_cache_test.dart test/features/cast/cast_quality_test.dart test/features/search/video_search_utils_test.dart test/core/client/twitter_account_test.dart test/features/subscriptions/subscription_handle_test.dart test/core/client/public_x_client_test.dart test/features/subscriptions/subscription_updates_test.dart test/features/feed/local_video_filter_test.dart test/core/database/retrieval_source_test.dart test/features/feed/similar_video_discovery_test.dart test/features/player/video_seek_bar_test.dart test/core/database/local_video_reactions_test.dart test/features/feed/local_recommendation_profile_test.dart test/features/feed/x_like_counter_test.dart test/features/feed/followed_hashtag_recommendations_test.dart test/features/feed/video_long_only_test.dart test/core/database/watched_video_recommendations_test.dart test/features/feed/hashtag_blacklist_test.dart test/features/feed/dislike_immediate_test.dart test/features/player/video_audio_provider_test.dart test/features/cast/cast_autoplay_queue_test.dart test/core/database/viewed_video_ids_test.dart test/features/feed/hashtag_search_fallback_test.dart
       - name: Restore permanent signing key
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -43,13 +43,13 @@ jobs:
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/twitter-video-release.p12
           printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=twittervideo\nstoreFile=../twitter-video-release.p12\n' "$ANDROID_SIGNING_PASSWORD" "$ANDROID_SIGNING_PASSWORD" > android/key.properties
       - name: Build release ARM64
-        run: flutter build apk --release --target-platform android-arm64 --build-name 0.24.0 --build-number 24
+        run: flutter build apk --release --target-platform android-arm64 --build-name 0.25.0 --build-number 25
       - name: Name APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk Twitter-video-0.24.0-arm64.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk Twitter-video-0.25.0-arm64.apk
       - uses: actions/upload-artifact@v4
         with:
           name: Twitter-video-Android-ARM64
-          path: Twitter-video-0.24.0-arm64.apk
+          path: Twitter-video-0.25.0-arm64.apk
           if-no-files-found: error
           retention-days: 30
       - name: Publish direct APK in GitHub Releases
@@ -58,13 +58,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: Gitskrap/X-vid
         run: |
-          if ! gh release view v0.24.0 >/dev/null 2>&1; then
-            gh release create v0.24.0 \
+          if ! gh release view v0.25.0 >/dev/null 2>&1; then
+            gh release create v0.25.0 \
               --target master \
-              --title "Twitter vidéo 0.24.0" \
-              --notes "Son coupé par défaut au lancement avec bouton pour l’activer. Plein écran conservé pendant les changements de vidéo. Blacklist de hashtags pour exclure les recommandations. Bouton Je n’aime pas immédiat : masque la vidéo, passe à la suivante et réduit les suggestions du même style. APK ARM64 signé."
+              --title "Twitter vidéo 0.25.0" \
+              --notes "Correction de la recherche et du clic sur hashtag : source publique et cache en secours. Le fil Vidéos utilise des pages de découvertes successives et évite les vidéos déjà vues. Cast enchaîne automatiquement sur la vidéo suivante lorsque le précédent média est terminé, tant que l’application et la connexion Cast sont actives. APK ARM64 signé."
           fi
-          gh release upload v0.24.0 Twitter-video-0.24.0-arm64.apk --clobber
+          gh release upload v0.25.0 Twitter-video-0.25.0-arm64.apk --clobber
       - name: Clear local signing material
         if: always()
         shell: bash
