@@ -9,6 +9,7 @@ import '../settings/settings_provider.dart';
 import '../settings/settings_screen.dart';
 import 'hashtag_provider.dart';
 import 'hashtag_blacklist_provider.dart';
+import 'local_video_reactions_provider.dart';
 import 'widgets/tweet_text_overlay.dart';
 
 class HashtagListScreen extends ConsumerWidget {
@@ -296,6 +297,7 @@ class _HashtagMediaFeedScreenState
   @override
   Widget build(BuildContext context) {
     final feedAsync = ref.watch(hashtagMediaProvider(widget.hashtag));
+    final reactions = ref.watch(localVideoReactionsProvider).value;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -330,7 +332,9 @@ class _HashtagMediaFeedScreenState
       ),
       body: feedAsync.when(
         data: (state) {
-          final tweets = state.tweets;
+          final tweets = state.tweets.where(
+            (tweet) => reactions?[tweet.id]?.value != -1,
+          ).toList();
           if (tweets.isEmpty) {
             return const Center(
                 child: Text('No media found',
@@ -351,6 +355,20 @@ class _HashtagMediaFeedScreenState
                     key: ValueKey('hash_feed_${tweets[index].id}'),
                     tweet: tweets[index],
                     isVisible: index == _currentIndex,
+                    onDislike: () {
+                      if (!mounted || index != _currentIndex) return;
+                      // The optimistic local reaction filters the current
+                      // clip immediately and reveals the next one.
+                      if (index >= tweets.length - 1) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (!mounted || !_pageController.hasClients) return;
+                          _pageController.jumpToPage(
+                              (tweets.length - 2).clamp(0, tweets.length));
+                          setState(() => _currentIndex =
+                              (tweets.length - 2).clamp(0, tweets.length));
+                        });
+                      }
+                    },
                     onPlaybackError: () {
                       if (index == _currentIndex && mounted) {
                         Future.delayed(
@@ -407,6 +425,7 @@ class HashtagFeedItem extends StatelessWidget {
   final bool isVisible;
   final bool autoFullscreen;
   final VoidCallback? onPlaybackError;
+  final VoidCallback? onDislike;
 
   const HashtagFeedItem({
     super.key,
@@ -414,6 +433,7 @@ class HashtagFeedItem extends StatelessWidget {
     required this.isVisible,
     this.autoFullscreen = false,
     this.onPlaybackError,
+    this.onDislike,
   });
 
   @override
@@ -426,7 +446,9 @@ class HashtagFeedItem extends StatelessWidget {
         tweet: tweet,
         onFullscreen: onFullscreen,
         isFullscreen: isFullscreen,
+        onDislike: onDislike,
       ),
+      onDislike: onDislike,
       onPlaybackError: onPlaybackError,
     );
   }
