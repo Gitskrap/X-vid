@@ -77,12 +77,17 @@ List<String> personalizedVideoTopics(
     scores[topic] = (scores[topic] ?? 0) + 2;
   }
 
-  // Hashtags deliberately followed in Twitter vidéo represent explicit
-  // interests. They outweigh passive subscriptions but not personal likes.
-  // Never send the saved hashtag list itself to an external recommendation API.
+  // Explicitly followed hashtags are stronger than passive subscriptions.
+  // A negative reaction still overrides them below.
   for (final hashtag in followedHashtags) {
     final topic = hashtag.trim().replaceFirst(RegExp(r'^#+'), '').toLowerCase();
-    if (RegExp(r'^[\\wÀ-ÿ]{2,40}
+    if (RegExp(r'^[\wÀ-ÿ]{2,40}$').hasMatch(topic) &&
+        !_stopWords.contains(topic)) {
+      scores[topic] = (scores[topic] ?? 0) + 6;
+    }
+  }
+
+  final rejectedTags = <String>{};
   final rejectedWords = <String>{};
   for (final feedback in reactions.values) {
     if (feedback.value == -1) {
