@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../player/player_pool_provider.dart';
+import 'persistent_fullscreen_provider.dart';
 import 'feed_provider.dart';
 import '../player/widgets/media_container.dart';
 import '../../core/models/tweet.dart';
@@ -133,12 +134,13 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
     final account = ref.watch(accountProvider);
     final videoUiHidden = ref.watch(videoUiHiddenProvider);
     final landscape = MediaQuery.orientationOf(context) == Orientation.landscape;
+    final immersive = ref.watch(persistentFullscreenProvider);
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
           Positioned.fill(child: _buildMediaFeed()),
-          if (!videoUiHidden && !landscape)
+          if (!videoUiHidden && !landscape && !immersive)
             Positioned(
             top: 0,
             left: 0,
@@ -159,7 +161,7 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
                           message: account == null
                               ? 'Aucun compte X sélectionné'
                               : 'Compte X actif : @${account.screenName.replaceFirst('@', '')}. '
-                                  'Les J’aime sont envoyés avec cette session.',
+                                  'Les J’aime restent uniquement dans Twitter vidéo.',
                           child: Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 9),
@@ -268,9 +270,33 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
               itemBuilder: (context, index) {
                 final settings = ref.read(settingsProvider);
                 return TiktokFeedItem(
+                  key: ValueKey('video_${tweets[index].id}'),
                   requireLongVideo: true,
                   tweet: tweets[index],
                   isVisible: index == _currentIndex && isScreenActive,
+                  onDislike: () {
+                    if (!mounted || index != _currentIndex) return;
+                    // Keep the same PageView index; it now holds the next
+                    // video. No provider rebuild or loading screen.
+                    ref.read(feedNotifierProvider.notifier)
+                        .hideDislikedVideo(tweets[index].id);
+                    final remaining = ref.read(feedNotifierProvider)
+                        .value?.tweets.length ?? 0;
+                    if (remaining > 0 && index >= remaining) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted || !_pageController.hasClients) return;
+                        _pageController.jumpToPage(remaining - 1);
+                        setState(() => _currentIndex = remaining - 1);
+                      });
+                    } else if (remaining > 0) {
+                      setState(() {});
+                      _managePool();
+                    }
+                    if (remaining <= 3) {
+                      unawaited(ref.read(feedNotifierProvider.notifier)
+                          .fetchMore());
+                    }
+                  },
                   onPlaybackError: () {
                     if (index == _currentIndex && mounted) {
                       Future.delayed(
@@ -375,6 +401,7 @@ class TiktokFeedItem extends ConsumerWidget {
   final bool autoFullscreen;
   final bool requireLongVideo;
   final VoidCallback? onPlaybackError;
+  final VoidCallback? onDislike;
 
   const TiktokFeedItem({
     super.key,
@@ -383,6 +410,7 @@ class TiktokFeedItem extends ConsumerWidget {
     this.autoFullscreen = false,
     this.requireLongVideo = false,
     this.onPlaybackError,
+    this.onDislike,
   });
 
   @override
@@ -404,7 +432,9 @@ class TiktokFeedItem extends ConsumerWidget {
               tweet: tweet,
               onFullscreen: onFullscreen,
               isFullscreen: isFullscreen,
+              onDislike: onDislike,
             ),
+            onDislike: onDislike,
             onPlaybackError: onPlaybackError,
           ),
           if (settings.showDebugInfo && !videoUiHidden)
