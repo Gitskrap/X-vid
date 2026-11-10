@@ -277,6 +277,10 @@ class _HashtagMediaFeedScreenState
       final state = feedAsync.value;
       if (state == null) return;
       final tweets = state.tweets;
+      if (ref.read(navigationProvider).selectedHashtag == widget.hashtag) {
+        ref.read(castPlaylistProvider.notifier).state =
+            List<Tweet>.unmodifiable(tweets);
+      }
 
       final pool = ref.read(playerPoolProvider.notifier);
       final activeIds = <String>{};
