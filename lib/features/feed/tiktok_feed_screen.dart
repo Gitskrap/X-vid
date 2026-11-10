@@ -268,6 +268,7 @@ class _TiktokFeedScreenState extends ConsumerState<TiktokFeedScreen> {
               itemBuilder: (context, index) {
                 final settings = ref.read(settingsProvider);
                 return TiktokFeedItem(
+                  requireLongVideo: true,
                   tweet: tweets[index],
                   isVisible: index == _currentIndex && isScreenActive,
                   onPlaybackError: () {
@@ -369,6 +370,7 @@ class TiktokFeedItem extends ConsumerWidget {
   final Tweet tweet;
   final bool isVisible;
   final bool autoFullscreen;
+  final bool requireLongVideo;
   final VoidCallback? onPlaybackError;
 
   const TiktokFeedItem({
@@ -376,6 +378,7 @@ class TiktokFeedItem extends ConsumerWidget {
     required this.tweet,
     required this.isVisible,
     this.autoFullscreen = false,
+    this.requireLongVideo = false,
     this.onPlaybackError,
   });
 
@@ -392,6 +395,7 @@ class TiktokFeedItem extends ConsumerWidget {
             tweet: tweet,
             isVisible: isVisible && castedTweetId != tweet.id,
             autoFullscreen: autoFullscreen,
+            requireLongVideo: requireLongVideo,
             overlayBuilder: (context, onFullscreen, isFullscreen) =>
                 TweetTextOverlay(
               tweet: tweet,
