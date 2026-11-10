@@ -35,7 +35,7 @@ class LocalVideoReactionsNotifier
         author: tweet.userHandle,
       );
     }
-    state = AsyncData(Map.unmodifiable(next));
+    state = AsyncData(Map<String, LocalVideoReaction>.unmodifiable(next));
     try {
       await Repository.setLocalVideoReaction(tweet, value);
     } catch (_) {
