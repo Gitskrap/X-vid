@@ -1,5 +1,5 @@
 name: xflow
-description: Video-only Android client for X, based on XFlow.
+description: Twit Vid - application Android open source pour regarder les videos X, avec recommandations et Google Cast.
 publish_to: 'none'
 version: 0.25.0+25
 
