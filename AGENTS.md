@@ -1,85 +1,82 @@
-# XFlow Repository Instructions
+# Twit Vid — repository instructions
 
-## Project Overview
+## Project overview
 
-XFlow is a single Flutter application at the repository root. The app entrypoint is [lib/main.dart](lib/main.dart), which initializes Flutter, `media_kit`, the database, and Twitter account state before launching a `ProviderScope`-wrapped `MaterialApp`.
+**Twit Vid** (GitHub repository `Gitskrap/twit-vid`) is the Flutter Android application branded **Twitter vidéo**. It is an independent fork of [XFlow](https://github.com/Alchemist-Aloha/xflow) focused on public X/Twitter videos, local viewing preferences, and Google Cast.
 
-## Repository Map
+- Android application ID: **`fr.twittervideo.client`**. Preserve this ID for in-place APK updates.
+- Flutter package name: **`xflow`**, retained for import compatibility (`package:xflow/...`). Do not casually rename it.
+- Android namespace: **`com.alchemistaloha.xflow`**, also retained to avoid breaking the native app.
+- Flutter entrypoint: `lib/main.dart`.
+- User-facing README: `README.md`; historical changelog: `TWITTER-VIDEO.md`.
+- No affiliation with X Corp.
 
-- [lib/](lib) contains the application code.
-- [test/](test) contains widget, feature, core, and database tests.
-- [docs/](docs) contains project documentation and the vendored Twitter API documentation subtree.
-- [android/](android) contains the Android host project and release workflow inputs.
-- [web/](web) contains the web app shell and manifest.
-- [build/](build) is generated output and must not be edited by hand.
+## Current app behavior
 
-## Sources of Truth
+- The Videos tab presents videos longer than 15 seconds and recommends content from *local likes*, meaningfully watched videos, locally followed accounts, and favorite hashtags.
+- Likes/dislikes are **local-only**, never POSTed to X. Displayed public like counts come from X's metadata.
+- Dislikes exclude clips and related topics. Blacklisted hashtags override favorable signals.
+- Search and hashtag pages can use X, public fallback, and cached media; these sources are not always available.
+- Video playback starts muted; full-screen mode follows the feed rather than individual videos.
+- Google Cast uses a LAN relay for MP4 streaming. Autoplay-next is implemented but receiver compatibility can vary.
 
-- Dependency and SDK constraints: [pubspec.yaml](pubspec.yaml)
-- Static analysis configuration: [analysis_options.yaml](analysis_options.yaml)
-- App entrypoint and shell structure: [lib/main.dart](lib/main.dart)
-- Root release workflow: [.github/workflows/release.yml](.github/workflows/release.yml)
-- Test suite: [test/](test)
-- User-facing project overview: [README.md](README.md)
+## Source map
 
-## Environment And Setup
+| Area | Purpose |
+| --- | --- |
+| `lib/core/` | X/public clients, models, caching and SQLite migrations |
+| `lib/features/feed/` | Vertical feed, personalized discovery, hashtags, reactions |
+| `lib/features/search/` | Video keyword and hashtag searches |
+| `lib/features/player/` | media_kit player pool, seek bar, volume and fullscreen |
+| `lib/features/cast/` | Chromecast integration and LAN video proxy |
+| `lib/features/subscriptions/` | Local account following |
+| `lib/features/settings/` | User preferences |
+| `test/` | Flutter tests, with FFI tests for local SQLite |
+| `android/` | Android platform configuration and permanent signing setup |
 
-- Use Flutter from the repository root.
-- Required Dart SDK constraint is `>=3.0.0 <4.0.0` from [pubspec.yaml](pubspec.yaml).
-- Run `flutter pub get` from the repository root before running or testing the app.
-- `flutter doctor` is a useful local environment check when setup is failing.
+## Environment and commands
 
-## Common Commands
+- Flutter SDK **3.44+** (GitHub Actions currently uses **3.47.6**).
+- Dart SDK **3.12+**, JDK 17, Android SDK.
 
-- Install dependencies: run `flutter pub get` from the repository root.
-- Start the app: run `flutter run` from the repository root.
-- Static analysis: run `flutter analyze` from the repository root.
-- Tests: run `flutter test` from the repository root.
-- Android release build: run `flutter build apk --release --split-per-abi` from the repository root.
-- Formatting: use `dart format` on touched Dart files from the repository root.
+```bash
+flutter pub get
+flutter analyze --no-fatal-infos --no-fatal-warnings
+flutter test
+flutter run
+```
 
-## Architecture And Boundaries
+Local signed release build (requires configured private Android signing key):
 
-- `lib/core/` holds app-wide services, persistence, navigation, client logic, and shared utilities.
-- `lib/features/` holds feature-specific UI and state for feed, profile, subscriptions, settings, auth, and player flows.
-- `main.dart` uses Riverpod state and `PopScope` to manage tab navigation and overlay screens inside a single shell; do not assume a named-route architecture.
-- Database and Twitter client code are initialized before `runApp`, so changes that touch startup order should be treated carefully.
-- `core` and `features` are conventional layers, not a strict import boundary; preserve the existing directionality of dependencies when possible.
+```bash
+flutter build apk --release --target-platform android-arm64
+```
 
-## Coding Conventions
+Never commit `android/key.properties`, Android keystore files, or authentication secrets.
 
-- Follow the analyzer and lint rules from [analysis_options.yaml](analysis_options.yaml).
-- Keep changes consistent with the existing Riverpod, `MaterialApp`, and Flutter widget patterns already used in [lib/main.dart](lib/main.dart) and neighboring files.
-- Prefer existing repository abstractions over introducing new architecture unless a change clearly requires it.
+## Publishing and versioning
 
-## Testing And Validation
+- **Canonical Android CI / Release workflow:** [`.github/workflows/twitter-video-android.yml`](.github/workflows/twitter-video-android.yml).
+- New releases must increment both version and build number in `pubspec.yaml`, plus the workflow's build/release version and filename.
+- The workflow signs releases using GitHub secrets `ANDROID_KEYSTORE_BASE64` and `ANDROID_SIGNING_PASSWORD`. The key must remain stable for updates over the existing app.
+- GitHub Releases and build artifacts are published in **`Gitskrap/twit-vid`**, not the old `Gitskrap/X-vid` address.
+- `.github/workflows/release.yml` and `publish-twitter-video-apk.yml` are legacy automation, not the primary release procedure. Avoid invoking those unless specifically needed.
+- A documentation-only change does **not** require a new Android version; the canonical workflow may nevertheless run because it triggers on pushes to `master`.
 
-- Put widget and feature tests under [test/](test), matching the existing `test/<area>/<name>_test.dart` layout.
-- Use `sqflite_common_ffi` in database tests that need local SQLite access, as shown in [test/core/database/repository_test.dart](test/core/database/repository_test.dart).
-- For routine Dart code changes, prefer `flutter test` plus `flutter analyze`; use a narrower test file when the change is localized.
-- For release-related changes, validate with `flutter build apk --release --split-per-abi`.
+## Coding constraints
 
-## Generated, Vendored, Or Protected Files
+- Use Riverpod 3 APIs that exist in `flutter_riverpod: ^3.3.1`; do not assume `StateProvider` is supported.
+- Preserve local user data across SQLite upgrades; add non-destructive migrations and tests for schema changes.
+- Reactions stay local; do not revive X like/unlike mutation endpoints.
+- Treat X/public APIs as unreliable. Keep fallback paths, visible error handling, cursor separation, and deduplication.
+- Keep the long-video rule scoped to the main Videos tab, except where explicitly required elsewhere.
+- Ensure UI changes work during Cast sessions and when no X account is connected.
+- Do not overwrite or disable the permanent Android release signature.
 
-- Do not edit files under [build/](build) by hand.
-- Treat generated test mocks such as `*.mocks.dart` files under [test/](test) as generated artifacts unless a workflow explicitly says otherwise.
-- Keep documentation in [docs/TwitterInternalAPIDocument/](docs/TwitterInternalAPIDocument) aligned with its own instructions file if present.
+## Validation and documentation
 
-## Change-Specific Guidance
-
-- When changing startup, navigation, persistence, or background-sync behavior, inspect the call chain from [lib/main.dart](lib/main.dart) through the touched feature or core service before editing.
-- When changing database behavior, verify the corresponding repository tests under [test/core/database/](test/core/database) or add a focused test there.
-- When changing release packaging, keep the root workflow in [.github/workflows/release.yml](.github/workflows/release.yml) aligned with the build command it runs.
-
-## Definition Of Done
-
-- The touched instruction file(s) should describe only verified repository-specific guidance.
-- Referenced files and commands should exist and match the repository's actual tooling.
-- Validate the change with `git diff --check` and the narrowest useful Dart/Flutter command for the touched instruction files, if any exists.
-
-## Relevant Documentation
-
-- [README.md](README.md)
-- [docs/tutorial/tutorial.md](docs/tutorial/tutorial.md)
-- [docs/tutorial/testing_ci.md](docs/tutorial/testing_ci.md)
-- [docs/TwitterInternalAPIDocument/README.md](docs/TwitterInternalAPIDocument/README.md)
+- Add focused tests under `test/` for code changes; use `sqflite_common_ffi` for SQLite.
+- Run `flutter analyze`, `flutter test`, and validate Android APK builds for release changes.
+- Update `README.md`, `TWITTER-VIDEO.md`, and the release notes when user-visible behavior changes.
+- Keep public repository branding **Twit Vid** and Android branding **Twitter vidéo** distinct from internal package identifiers.
+- Project license: MIT; preserve credits and notices for XFlow/Squawker.
