@@ -1,87 +1,84 @@
-# <img src="assets/app_icon.png" alt="App Icon" width="40"/> XFlow
+# <img src="assets/app_icon.png" alt="Icône de Twitter vidéo" width="40" /> Twit Vid — Twitter vidéo
 
-XFlow is a Flutter-based application that reimagines how you consume media from Twitter/X. It provides a seamless, TikTok-style infinite scrolling experience specifically tailored for browsing videos and images from the platform.
+**Twit Vid** est un client Android open source, développé en **Flutter**, pour regarder les **vidéos publiques de X (Twitter)** dans un fil vertical, sans l'interface classique du réseau social.
 
-By leveraging the robust authentication and data layers originally built for the [Squawker](https://github.com/j-fb/squawker) project, XFlow allows you to securely log in, view media from your subscriptions, and explore trending content in a highly optimized, full-screen player environment.
+> **Dépôt GitHub :** `Gitskrap/twit-vid`  
+> **Nom sur le téléphone :** **Twitter vidéo**  
+> **Dernière version publiée vérifiée :** [v0.25.0](https://github.com/Gitskrap/twit-vid/releases/tag/v0.25.0)  
+> **Téléchargement Android :** [APK ARM64 signé](https://github.com/Gitskrap/twit-vid/releases/download/v0.25.0/Twitter-video-0.25.0-arm64.apk)
 
-## ✨ Features
+Ce projet est un **fork indépendant de [XFlow](https://github.com/Alchemist-Aloha/xflow)**. Il n'est ni développé ni approuvé par X Corp.
 
-* **TikTok-Style Media Feed:** Infinite vertical scrolling through full-screen media content.
-* **Smart Pre-caching:** Automatically warms up the next few videos in your feed so playback starts instantly without buffering.
-* **Subscription Management:** Easily manage your X/Twitter subscriptions and view a dedicated feed of their media.
-* **Profile & Media Grid:** View user profiles and lazily-loaded grids of their media uploads.
-* **Optimized Caching:** Implements `ffcache` and `cached_network_image` to aggressively cache API responses and media assets, dramatically reducing network requests and improving load times.
-* **State Preservation:** Keeps your place in the infinite scroll feed even when navigating deep into user profiles or switching tabs.
+## Fonctionnalités
 
-## 🚀 Getting Started
+- **Fil « Vidéos » personnalisé** : recommandations issues des **J’aime enregistrés dans l’application**, des vidéos effectivement regardées, des comptes suivis localement et des hashtags favoris.
+- **Vidéos de plus de 15 secondes uniquement** dans le fil principal ; les durées inconnues sont vérifiées par le lecteur lorsqu'il le peut.
+- **J’aime et Je n’aime pas privés à l’application** : aucune action de like/dislike envoyée au compte X. Un 👎 masque la vidéo et réduit les propositions similaires.
+- **Compteurs publics de X** : le nombre de J’aime affiché reste celui communiqué par X, et non celui des réactions locales.
+- **Hashtags favoris et blacklist** : suivre un thème pour améliorer les recommandations, ou exclure les vidéos portant certains hashtags.
+- **Abonnements locaux** : ajouter ou retirer des comptes publics dans l'application sans les suivre sur X ; l'accès aux vidéos dépend toutefois des sources disponibles.
+- **Recherche de vidéos et de hashtags** : tentative par X, source publique de secours, puis résultats déjà présents dans le cache si le réseau ou les services échouent.
+- **Lecteur vertical** : défilement fluide, barre de progression manipulable, son coupé au démarrage, mode paysage et plein écran conservé lors du changement de vidéo.
+- **Google Cast (bêta)** : envoi de la vidéo au téléviseur via un relais Wi-Fi local, contrôle du volume et tentative de lecture automatique de la suivante.
+- **Cache et historique locaux** : mémorisation des vidéos vues pour limiter les répétitions entre les sessions.
 
-### Prerequisites
+Les fonctionnalités dépendant de X ou d'un service public tiers peuvent être limitées, interrompues ou retourner des résultats incomplets. L'enchaînement Cast reste à valider selon les téléviseurs et les formats vidéo.
 
-* Flutter SDK >=3.44.0 (CI uses 3.47.6)
-* Dart SDK >=3.12.0 <4.0.0
-* JDK 17 for Android builds
-* Android Studio / Xcode (for emulation/deployment)
+## Installer sur Android
 
-### Installation
+1. Ouvrir la [page des versions](https://github.com/Gitskrap/twit-vid/releases/latest).
+2. Télécharger le fichier **`Twitter-video-…-arm64.apk`** de la dernière version.
+3. L'ouvrir sur un téléphone Android ARM64 et autoriser l'installation depuis cette source si Android le demande.
+4. Pour les prochaines mises à jour, installer le nouvel APK **par-dessus l'application existante** : le paquet Android et la signature doivent rester identiques.
 
-1. Clone the repository:
+**Version actuelle :** [Twitter-video-0.25.0-arm64.apk](https://github.com/Gitskrap/twit-vid/releases/download/v0.25.0/Twitter-video-0.25.0-arm64.apk).
 
-   ```bash
-   git clone https://github.com/your-username/xflow.git
-   cd xflow
-   ```
+L'accès à un compte X est facultatif pour les fonctions locales, mais certaines vidéos ou certaines recherches peuvent nécessiter une session X valide.
 
-2. Get the Flutter dependencies:
+## Développement
 
-   ```bash
-   flutter pub get
-   ```
-
-3. Run the app:
-
-   ```bash
-   flutter run
-   ```
-
-### Android release builds
+**Prérequis :** Flutter ≥ 3.44.0, Dart ≥ 3.12.0 et JDK 17 pour Android. La CI utilise Flutter 3.47.6.
 
 ```bash
-flutter pub get --enforce-lockfile
-flutter build apk --release --split-per-abi
+git clone https://github.com/Gitskrap/twit-vid.git
+cd twit-vid
+flutter pub get
+flutter analyze
+flutter test
+flutter run
 ```
 
-APKs are written to `build/app/outputs/flutter-apk/`. Keep `pubspec.lock` committed;
-upgrade dependencies deliberately and rerun tests and the release build.
-Increment the build number (`+1` in `pubspec.yaml`) for each distributed update.
-The current release build uses the debug signing key, not a production key;
-configure stable release signing before publishing, preserving the signing key
-for existing installations.
+Pour générer un APK Android local :
 
-Android backup and device transfer are disabled because app storage contains
-login credentials. Local data is unchanged, but reinstalling or moving devices
-requires logging in and recreating subscriptions/settings. Cleartext HTTP is
-allowed only for the existing transaction-ID fallback service; it remains
-unencrypted until that fallback is migrated to HTTPS or removed.
+```bash
+flutter build apk --release --target-platform android-arm64
+```
 
-## 📁 Project Structure
+La génération **release** demande les informations de signature privée configurées dans `android/key.properties`. Le dépôt ne contient ni la clé ni ses mots de passe. La [CI Android](.github/workflows/twitter-video-android.yml) utilise des secrets GitHub pour signer et publier les APK avec une clé stable.
 
-* `lib/core/` - Core infrastructure including the database, navigation, and the modified Twitter/X client.
-* `lib/features/auth/` - Webview-based login implementation.
-* `lib/features/feed/` - The core TikTok-style infinite scrolling feed and associated providers.
-* `lib/features/player/` - Video player pool management and rendering.
-* `lib/features/profile/` - User profile details and media grid views.
-* `lib/features/subscriptions/` - Subscription list management.
-* `lib/features/settings/` - App settings and preferences.
+**Important :** le nom interne du package Flutter reste `xflow` et le namespace Android historique reste en place pour préserver les imports et la compatibilité. Le nom public du dépôt et celui de l'application sont indépendants de ces identifiants techniques. Le paquet Android installé est `fr.twittervideo.client`.
 
+## Organisation du code
 
-## 🛠 Alternative Feed Fetching
+| Chemin | Rôle |
+| --- | --- |
+| `lib/features/feed/` | Fil Vidéos, hashtags, réactions et recommandations |
+| `lib/features/search/` | Recherche de vidéos |
+| `lib/features/cast/` | Google Cast et relais local |
+| `lib/features/player/` | Lecture vidéo, barre de progression et audio |
+| `lib/features/subscriptions/` | Abonnements enregistrés sur le téléphone |
+| `lib/core/` | Clients X/publics, modèles et base de données |
+| `test/` | Tests automatiques |
+| `TWITTER-VIDEO.md` | Historique technique des anciennes versions |
 
-XFlow also supports fetching feeds using the [Twitter Internal API Document](https://github.com/fa0311/TwitterInternalAPIDocument). This repository provides detailed insights and tools for interacting with Twitter's internal APIs, offering an alternative method for retrieving media feeds. This can be particularly useful for advanced use cases or when exploring additional data endpoints.
+## Confidentialité et limites
 
-## 🤝 Contributing
+Les J’aime, Je n’aime pas, abonnements et listes de hashtags sont conservés **localement** dans l'application. Les mots-clés utilisés pour récupérer les vidéos sont envoyés aux services de recherche sollicités ; ce n'est donc **pas** un mode de navigation totalement hors ligne. Le Cast peut transmettre le flux vidéo par le réseau local, sans dupliquer l'écran du téléphone.
 
-Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/your-username/xflow/issues).
+Le projet utilise des interfaces **non officielles** de X et peut être affecté par leurs restrictions, des liens vidéo temporaires ou les limites de Google Cast.
 
-## 📝 License
+## Licence et crédits
 
-MIT
+Projet distribué sous licence **MIT**, voir [LICENSE](LICENSE). Fork de [XFlow](https://github.com/Alchemist-Aloha/xflow) ; une partie de la couche de connexion et de données provient également de [Squawker](https://github.com/j-fb/squawker). Merci aux contributeurs des projets d'origine.
+
+Les contributions et signalements de bugs sont bienvenus via les [issues GitHub](https://github.com/Gitskrap/twit-vid/issues).

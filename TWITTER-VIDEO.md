@@ -1,23 +1,53 @@
-# Twitter vidéo
+# Twit Vid — historique de Twitter vidéo
 
-Fork libre de [XFlow](https://github.com/Alchemist-Aloha/xflow) sous licence MIT, pour Android.
+> **Ce document conserve l'historique des versions.** Les descriptions ci-dessous peuvent
+> refléter des limitations ou des choix techniques **qui ne sont plus actuels**.
+> La présentation et les instructions d'installation à jour sont dans le [README](README.md).
 
-**Objectif :** navigation verticale façon TikTok, mais uniquement avec les vidéos de X/Twitter.
+**Dépôt :** [Gitskrap/twit-vid](https://github.com/Gitskrap/twit-vid)  
+**Nom Android :** « Twitter vidéo » (`fr.twittervideo.client`)  
+**Dernière version vérifiée :** [v0.25.0](https://github.com/Gitskrap/twit-vid/releases/tag/v0.25.0)  
+**APK signé :** [Télécharger v0.25.0 ARM64](https://github.com/Gitskrap/twit-vid/releases/download/v0.25.0/Twitter-video-0.25.0-arm64.apk)
 
-## Bêta 0.1.0
-- Vidéos uniquement dans le fil, y compris pour les anciennes données en cache.
-- Interface sombre, nom Android « Twitter vidéo », identifiant indépendant `fr.twittervideo.client`.
-- Préparation des lecteurs limitée aux vidéos précédente, actuelle et suivante.
-- Évite les mises à jour du pool vidéo pendant le rendu Flutter.
-- Cache par défaut réduit à 250 Mo, chargement par lots plus petits.
+Fork libre de [XFlow](https://github.com/Alchemist-Aloha/xflow), sous licence MIT.
+Non affilié à X Corp.
 
-## APK Android
-Aller sur [Actions](https://github.com/Gitskrap/X-vid/actions/workflows/twitter-video-android.yml), sélectionner le dernier build réussi, puis télécharger **Twitter-video-Android-ARM64** ; décompresser le ZIP pour installer l'APK.
+## Versions récentes
 
-L'application utilise les accès non officiels à X hérités de XFlow, qui peuvent cesser de fonctionner. Bêta non encore testée sur téléphone. Le build release utilise pour l'instant la signature *debug* héritée de XFlow : une signature persistante sera nécessaire pour les futures mises à jour. Aucune affiliation avec X Corp.
+### 0.25.0 — recherche, fraîcheur et Cast automatique
+- Recherche vidéo et hashtag avec accès X si possible, recherche publique de secours et cache local.
+- Recommandations paginées, exclusion des vidéos vues et davantage de renouvellement du fil.
+- Tentative d'enchaînement automatique de la vidéo suivante sur Chromecast ; le résultat dépend du téléviseur et des flux disponibles.
 
-## Licence
-Code originel : MIT © 2026 Alchemist-Aloha. Ce fork conserve la licence du projet amont et ses avis.
+### 0.24.0 — lecture et choix personnels
+- Son coupé par défaut au lancement.
+- Plein écran conservé pendant le défilement vertical.
+- Blacklist de hashtags séparée des favoris.
+- 👎 local : masquage immédiat et passage à la vidéo suivante.
+
+### 0.23.0 — recommandations et durée
+- Recommandations fondées sur les J’aime internes, les vidéos réellement visionnées, les abonnements locaux et les hashtags.
+- Dans le fil principal, seules les vidéos de **plus de 15 secondes** sont admissibles.
+
+### 0.21.0–0.22.0 — réactions privées et hashtags
+- Les ❤️ et 👎 sont enregistrés localement, **sans liker ni disliker sur X**.
+- Le compteur de J’aime affiché provient de X ; un chiffre indisponible est représenté par un tiret.
+- Les hashtags suivis orientent les sujets recommandés.
+
+### 0.19.0–0.20.0 — navigation
+- Barre de progression tactile avec temps de lecture.
+- Session X active affichée dans l'en-tête à la place du nom de l'application.
+
+## Anciennes notes de versions
+
+### Bêta 0.1.0
+- Fil vertical exclusivement vidéo, premières optimisations du lecteur et du cache.
+- Choix du nom Android « Twitter vidéo » et identifiant `fr.twittervideo.client`.
+
+**Attention :** les premières versions mentionnaient une signature de test.
+Les APK récents sont publiés avec une signature Android permanente via GitHub Actions.
+Ne pas remplacer cette signature ni l'identifiant Android : cela empêcherait les
+mises à jour par-dessus une installation existante.
 
 ## Version 0.3.0
 - Lecture fiable des dates Twitter (format classique, ISO 8601 et epoch millisecondes).
