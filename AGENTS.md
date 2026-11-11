@@ -60,7 +60,7 @@ Never commit `android/key.properties`, Android keystore files, or authentication
 - New releases must increment both version and build number in `pubspec.yaml`, plus the workflow's build/release version and filename.
 - The workflow signs releases using GitHub secrets `ANDROID_KEYSTORE_BASE64` and `ANDROID_SIGNING_PASSWORD`. The key must remain stable for updates over the existing app.
 - GitHub Releases and build artifacts are published in **`Gitskrap/twit-vid`**, not the old `Gitskrap/X-vid` address.
-- `.github/workflows/release.yml` and `publish-twitter-video-apk.yml` are legacy automation, not the primary release procedure. Avoid invoking those unless specifically needed.
+- `.github/workflows/release.yml` is legacy automation, not the primary release procedure. The obsolete one-time v0.16.0 APK publishing workflow was removed to avoid accidentally republishing an old release.
 - A documentation-only change does **not** require a new Android version; the canonical workflow may nevertheless run because it triggers on pushes to `master`.
 
 ## Coding constraints
